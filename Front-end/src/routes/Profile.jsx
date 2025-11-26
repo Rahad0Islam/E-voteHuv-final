@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { changePassword, getUserVoteHistory, updateCoverImage as apiUpdateCoverImage, updateProfileImage as apiUpdateProfileImage } from '../lib/api'
+import { changePassword, updateCoverImage as apiUpdateCoverImage, updateProfileImage as apiUpdateProfileImage } from '../lib/api'
 
 // --- THEME-AWARE COLOR MAPPING (Copied from Home.jsx for consistency) ---
 const ACCENT_PRIMARY_HEX = '#1E3A8A'; // Primary Blue (Deep/Navy)
@@ -86,9 +86,6 @@ export default function Profile(){
   const [pwdNew, setPwdNew] = useState('')
   const [pwdNew2, setPwdNew2] = useState('')
 
-  const [history, setHistory] = useState([])
-  const [loadingHistory, setLoadingHistory] = useState(false)
-
   const coverInput = useRef(null)
   const avatarInput = useRef(null)
 
@@ -108,11 +105,6 @@ export default function Profile(){
     window.addEventListener('storage', onStorage)
     const id = setInterval(onStorage, 800) // Poll for changes as 'storage' event is inconsistent
     return ()=> { window.removeEventListener('storage', onStorage); clearInterval(id); }
-  },[])
-
-  useEffect(()=>{
-    setLoadingHistory(true)
-    getUserVoteHistory().then(setHistory).catch(()=>{}).finally(()=> setLoadingHistory(false))
   },[])
 
   const onPickCover = ()=> coverInput.current?.click()
@@ -308,17 +300,6 @@ export default function Profile(){
              QUICK ACTIONS
           </h3>
           <div className="flex flex-col gap-3 pt-2">
-            
-            {/* BUTTON 1: View Vote History (Secondary Style) */}
-            <button 
-              onClick={()=> document.getElementById('vote-history')?.scrollIntoView({ behavior:'smooth' })}
-              className={accentButtonClass(false) + ` w-full flex items-center justify-center font-mono`}
-              disabled={busy}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-history mr-2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/></svg>
-              VIEW VOTE HISTORY
-            </button>
-
             {/* BUTTON 2: Update Password (Primary Style) */}
             <button 
               onClick={()=> setShowPwd(v=>!v)}
@@ -348,42 +329,6 @@ export default function Profile(){
           </div>
         </div>
       )}
-
-      {/* Vote History Panel */}
-      <div id="vote-history" className={`mt-6 ${panelClass}`}>
-        <h3 className={`text-xl font-bold mb-4 ${accentColorClass}`}>Your Vote History</h3>
-        {loadingHistory ? (
-          <div className={`${COLOR_MAP.TEXT_SECONDARY}`}>Loading...</div>
-        ) : history.length === 0 ? (
-          <div className={`${COLOR_MAP.TEXT_SECONDARY}`}>No votes recorded yet.</div>
-        ) : (
-          <ul className="space-y-3">
-            {history.map(h => (
-              <li key={h.id} className={`p-3 rounded-lg border ${cardBorderClass}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold">{h.event?.title || 'Unknown Event'}</div>
-                    <div className={`text-xs ${COLOR_MAP.TEXT_SECONDARY}`}>{new Date(h.createdAt).toLocaleString()}</div>
-                  </div>
-                  <div className={`text-xs ${COLOR_MAP.TEXT_SECONDARY}`}>{h.event?.electionType}</div>
-                </div>
-                <div className="mt-2 text-sm">
-                  <div className={`${COLOR_MAP.TEXT_SECONDARY}`}>You selected:</div>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {h.selected.map(s => (
-                      <span key={s.id} className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                        <img src={s.profileImage || 'https://placehold.co/20x20/d1d5db/4b5563?text=U'} alt={s.fullName} className="w-5 h-5 rounded-full object-cover" />
-                        <span>{s.fullName || s.id}</span>
-                        {s.rank ? <span className="text-xs opacity-70">(Rank {s.rank})</span> : null}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   )
 }
