@@ -9,6 +9,7 @@ import { AsynHandler } from "../Utils/AsyncHandler.js";
 import { FileDelete, FileUpload } from "../Utils/Cloudinary.js";
 import mongoose from "mongoose";
 import { getIO } from "../socket.js";
+import { User } from "../Models/User.Model.js";
 
 
 const CreateVoteEvent = AsynHandler(async(req,res)=>{
@@ -228,15 +229,14 @@ const GivenVote=AsynHandler(async(req,res)=>{
     }
 
 
+    // Validate nominees
+    const approvedNominees = await NomineeReg.find({ EventID, Approved: true }).select('UserID').lean();
+    const approvedIds = approvedNominees.map(n => String(n.UserID));
     for (const nominee of SelectedNominee) {
-        const exists = await NomineeReg.findOne({
-        UserID: nominee.NomineeId,
-        EventID
-        });
-        if (!exists) {
+        if (!approvedIds.includes(String(nominee.NomineeId))) {
             throw new ApiError(404, `Nominee ${nominee.NomineeId} is not valid for this event`);
         }
-     }
+    }
 
 
     if(DetailsVoteReg.hasVoted){
@@ -259,21 +259,52 @@ const GivenVote=AsynHandler(async(req,res)=>{
         if (now < start || now > end) {
         throw new ApiError(403, "Voting is not currently open");}
 
-
-
-    const Vote= await VoteCount.create({
-        EventID,
-        VoterID:UserID,
-        ElectionType,
-        SelectedNominee,
-
-    })
-    if(!Vote){
-        throw new ApiError(501,"Given Vote failed!");
+    // Tally-only update
+    const eventObjId = new mongoose.Types.ObjectId(EventID);
+    let tallyDoc = await VoteCount.findOne({ EventID: eventObjId, ElectionType });
+    if (!tallyDoc) {
+      tallyDoc = await VoteCount.create({ EventID: eventObjId, ElectionType, Tally: [] });
     }
-    console.log("You are succesfully voted");
 
+    const toObjectId = (v)=> (typeof v === 'string' ? new mongoose.Types.ObjectId(v) : v);
 
+    // Work on a mutable copy to guarantee mongoose change tracking
+    const tallyArr = Array.isArray(tallyDoc.Tally) ? [...tallyDoc.Tally] : [];
+
+    const ensureEntry = (id) => {
+      const sid = String(id);
+      let entry = tallyArr.find(t => String(t.NomineeId) === sid);
+      if (!entry) {
+        entry = { NomineeId: toObjectId(sid), TotalVote: 0, TotalRank: 0 };
+        tallyArr.push(entry);
+      }
+      return entry;
+    };
+
+    if (ElectionType === 'Single') {
+      const id = SelectedNominee[0].NomineeId;
+      ensureEntry(id).TotalVote += 1;
+    } else if (ElectionType === 'MultiVote') {
+      const unique = Array.from(new Set(SelectedNominee.map(x => String(x.NomineeId))));
+      unique.forEach(sid => { ensureEntry(sid).TotalVote += 1; });
+    } else if (ElectionType === 'Rank') {
+      const N = approvedIds.length || SelectedNominee.length; // fallback
+      const rankMap = new Map(); // id -> rank
+      SelectedNominee.forEach(x => {
+        const r = typeof x.Rank === 'number' ? x.Rank : parseInt(x.Rank,10) || N;
+        rankMap.set(String(x.NomineeId), Math.max(1, Math.min(N, r)));
+      });
+      approvedIds.forEach(sid => {
+        const score = rankMap.get(sid) || N;
+        ensureEntry(sid).TotalRank += score;
+      });
+    } else {
+      throw new ApiError(400, 'Unknown ElectionType');
+    }
+
+    tallyDoc.Tally = tallyArr;
+    tallyDoc.markModified('Tally');
+    await tallyDoc.save({ validateBeforeSave: false });
 
     DetailsVoteReg.hasVoted=true;
     await DetailsVoteReg.save({validateBeforeSave:false});
@@ -283,7 +314,7 @@ const GivenVote=AsynHandler(async(req,res)=>{
     return res
     .status(201)
     .json(
-        new ApiResponse(201,Vote,"You succesfully voted!")
+        new ApiResponse(201,{ tallied:true },"You succesfully voted!")
     )
 
 })
@@ -298,45 +329,49 @@ const CountingVote=AsynHandler(async(req,res)=>{
         throw new ApiError(401,"EventID is required! ");
      }
     
-    
-      const eventObjectId = new mongoose.Types.ObjectId(EventID);
+    const eventObjId = new mongoose.Types.ObjectId(EventID);
+    const [docSingle, docMulti, docRank] = await Promise.all([
+      VoteCount.findOne({ EventID: eventObjId, ElectionType: 'Single' }).lean(),
+      VoteCount.findOne({ EventID: eventObjId, ElectionType: 'MultiVote' }).lean(),
+      VoteCount.findOne({ EventID: eventObjId, ElectionType: 'Rank' }).lean(),
+    ]);
 
-     const NomineeListForSingleAndMultiVote=await  VoteCount.aggregate([
-        {$match:{EventID:eventObjectId,
-            ElectionType:{$in: ["Single","MultiVote"]}
-        }},
-        {$unwind:"$SelectedNominee"},
-        {
-            $group:{
-                _id:"$SelectedNominee.NomineeId",
-                TotalVote:{$sum:1}
-            }
-        },
-        { $sort: { TotalVote: -1 } },
-        // Lookup user to get name
-        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' }},
-        { $addFields: { NomineeIDName: { $ifNull: [ { $arrayElemAt: ['$user.FullName', 0] }, 'Unknown' ] } } },
-        { $project: { _id: 0, NomineeID: '$_id', NomineeIDName: 1, TotalVote: 1 } }
-     ]);
-    
-    const NomineeListForRank=await  VoteCount.aggregate([
-        {$match:{EventID:eventObjectId,
-            ElectionType:"Rank"
-        }},
-        {$unwind:"$SelectedNominee"},
-        {
-            $group:{
-                _id:"$SelectedNominee.NomineeId",
-                TotalRank:{$sum:"$SelectedNominee.Rank"}
-            }
-        },
-        { $sort: { TotalRank: 1 } },
-        { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' }},
-        { $addFields: { NomineeIDName: { $ifNull: [ { $arrayElemAt: ['$user.FullName', 0] }, 'Unknown' ] } } },
-        { $project: { _id: 0, NomineeID: '$_id', NomineeIDName: 1, TotalRank: 1 } }
-     ]);
-    
-     
+    // Combine Single + Multi tallies
+    const voteMap = new Map(); // id -> TotalVote
+    const addVotes = (doc) => {
+      if (!doc || !Array.isArray(doc.Tally)) return;
+      doc.Tally.forEach(t => {
+        const sid = String(t.NomineeId);
+        voteMap.set(sid, (voteMap.get(sid) || 0) + (t.TotalVote || 0));
+      });
+    };
+    addVotes(docSingle); addVotes(docMulti);
+
+    const rankListRaw = Array.isArray(docRank?.Tally) ? docRank.Tally : [];
+
+    // Collect all nominee IDs we will report on
+    const allIdsSet = new Set([ ...voteMap.keys(), ...rankListRaw.map(t=>String(t.NomineeId)) ]);
+    const allIds = Array.from(allIdsSet).map(id => new mongoose.Types.ObjectId(id));
+
+    // Lookup names
+    let nameMap = new Map();
+    if (allIds.length) {
+      const users = await User.find({ _id: { $in: allIds } }).select('FullName').lean();
+      users.forEach(u => nameMap.set(String(u._id), u.FullName || 'Unknown'));
+    }
+
+    const NomineeListForSingleAndMultiVote = Array.from(voteMap.entries()).map(([id, TotalVote]) => ({
+      NomineeID: id,
+      NomineeIDName: nameMap.get(id) || 'Unknown',
+      TotalVote
+    })).sort((a,b)=> b.TotalVote - a.TotalVote);
+
+    const NomineeListForRank = rankListRaw.map(t => ({
+      NomineeID: String(t.NomineeId),
+      NomineeIDName: nameMap.get(String(t.NomineeId)) || 'Unknown',
+      TotalRank: t.TotalRank || 0,
+    })).sort((a,b)=> a.TotalRank - b.TotalRank);
+ 
     try{ getIO().to(String(EventID)).emit('countUpdate', { eventId: EventID, rank: NomineeListForRank, simple: NomineeListForSingleAndMultiVote }); }catch(e){}
      return res
      .status(201)
@@ -588,34 +623,8 @@ const GetNomineeRegStatus = AsynHandler(async (req, res) => {
 
 // New endpoint: get current user's vote history (list of votes with event & nominees)
 const GetMyVoteHistory = AsynHandler(async (req, res) => {
-  const UserID = req.user?._id;
-  if(!UserID) throw new ApiError(401, 'User not found');
-
-  // Fetch all votes cast by user
-  const votes = await VoteCount.find({ VoterID: UserID })
-    .populate('EventID', 'Title ElectionType VoteStartTime VoteEndTime')
-    .populate('SelectedNominee.NomineeId', 'FullName UserName ProfileImage');
-
-  const history = votes.map(v => ({
-    id: v._id,
-    event: v.EventID ? {
-      id: v.EventID._id,
-      title: v.EventID.Title,
-      electionType: v.EventID.ElectionType,
-      voteStart: v.EventID.VoteStartTime,
-      voteEnd: v.EventID.VoteEndTime,
-    } : null,
-    selected: v.SelectedNominee.map(sn => ({
-      id: sn.NomineeId?._id || sn.NomineeId,
-      fullName: sn.NomineeId?.FullName,
-      userName: sn.NomineeId?.UserName,
-      profileImage: sn.NomineeId?.ProfileImage,
-      rank: sn.Rank || null
-    })),
-    createdAt: v.createdAt
-  }));
-
-  return res.status(200).json(new ApiResponse(200, history, 'Vote history fetched'));
+  // Tally-only system: no per-user vote history retained
+  return res.status(200).json(new ApiResponse(200, [], 'Vote history not stored'));
 });
 
 // ListEvents remains below
