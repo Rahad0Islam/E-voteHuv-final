@@ -45,7 +45,7 @@ const CHART_DARK_GRAY = '#E5E7EB'; // Gray-200
 const BTN_PRIMARY = `bg-[${ACCENT_PRIMARY_HEX}] text-white hover:bg-[${ACCENT_SECONDARY_HEX}] transition duration-200 shadow-lg shadow-[${ACCENT_PRIMARY_HEX}]/40`
 const INPUT_CLASS = `w-full p-3 rounded-lg border border-gray-300 dark:border-gray-700 ${BG_CARD} ${TEXT_PRIMARY} placeholder-gray-500 focus:ring-2 focus:ring-[${ACCENT_PRIMARY_HEX}] dark:focus:ring-[${ACCENT_SECONDARY_HEX}] outline-none transition duration-150`
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://e-votehuv-final-1.onrender.com/'
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8002'
 
 
 // --- Constants for Sidebar Navigation ---
