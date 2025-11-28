@@ -36,7 +36,9 @@ const ACCENT_SECONDARY_HEX = '#3B82F6'; // Link Blue (Bright/Lighter)
 const BG_BODY = 'bg-[#ECEBEB] dark:bg-[#1A2129]' 
 const BG_SIDEBAR = 'bg-white dark:bg-[#111827]'
 const BG_CARD = 'bg-white dark:bg-[#111827]'
-const BG_DARK_CARD = 'bg-[#1a202c] dark:bg-[#111827]' // Darker background for metrics on event page
+// FIX START: Change bg-[#1a202c] to bg-white so that metric boxes in event detail view are white in light mode.
+const BG_DARK_CARD = 'bg-white dark:bg-[#111827]' // Darker background for metrics on event page
+// FIX END
 
 // Text colors
 const TEXT_PRIMARY = 'text-gray-900 dark:text-white'
