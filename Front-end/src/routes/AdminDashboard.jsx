@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { listEvents, countVote, getPendingNominees, approveNominee, createEvent, api as apiClient, listCampaignPosts, deleteCampaignPost, deleteCampaignComment } from '../lib/api'
+import { listEvents, countVote, getPendingNominees, approveNominee, createEvent, api as apiClient, listCampaignPosts, deleteCampaignPost, deleteCampaignComment, rotateOnCampusCode, updateEventTimes } from '../lib/api'
 import { getVoters } from '../lib/votersApi'
 import { io } from 'socket.io-client'
 import { Bar, Doughnut } from 'react-chartjs-2' // Keep Bar and Doughnut for now, but Bar will be used for Live Tally
@@ -163,13 +163,27 @@ export default function AdminDashboard(){
   const [voters, setVoters] = useState([])
 
   // event creation state
-  const [newEvent, setNewEvent] = useState({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single' })
+  const [newEvent, setNewEvent] = useState({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single', votingMode:'online', codeRotationMinutes:15 })
   const [ballotFiles, setBallotFiles] = useState([])
   const [isCreating, setIsCreating] = useState(false)
   const [loadingEvent, setLoadingEvent] = useState(false)
 
   // campaign posts state
   const [campaignPosts, setCampaignPosts] = useState([])
+
+  // rotation code state
+  const [isRotating, setIsRotating] = useState(false)
+  const [codeInfo, setCodeInfo] = useState({ code: '', expiresAt: null })
+  const [codeRemaining, setCodeRemaining] = useState(null)
+
+  // time editing state
+  const [editTimes, setEditTimes] = useState({ RegEndTime:'', VoteStartTime:'', VoteEndTime:'' })
+  const [savingTimes, setSavingTimes] = useState(false)
+
+  // current time for countdowns
+  const [now, setNow] = useState(()=> new Date())
+  useEffect(()=>{ const id = setInterval(()=> setNow(new Date()), 1000); return ()=> clearInterval(id) },[])
+  const timeLeft = (iso)=>{ const d=new Date(iso); if(isNaN(d.getTime())) return '00:00:00'; const t=d.getTime()-now.getTime(); if(t<=0) return '00:00:00'; const h=String(Math.floor(t/3600000)).padStart(2,'0'); const m=String(Math.floor((t%3600000)/60000)).padStart(2,'0'); const s=String(Math.floor((t%60000)/1000)).padStart(2,'0'); return `${h}:${m}:${s}` }
 
   // Initial fetch of all events
   useEffect(()=>{ listEvents().then(setEvents) },[])
@@ -263,6 +277,64 @@ export default function AdminDashboard(){
     }
   },[activeEvent])
 
+  // --- Code Info Fetching and Timer ---
+  const fetchCodeInfo = useCallback(async ()=>{
+    if(!activeEvent || activeEvent.votingMode !== 'onCampus' || activeEvent.status !== 'voting') return
+    try{
+      const res = await apiClient.get('/api/V1/admin/getCurrentVoteCode', { params: { EventID: activeEvent._id } })
+      const d = res.data?.data || {}
+      setCodeInfo({ code: d.currentVoteCode || '', expiresAt: d.currentCodeExpiresAt || null })
+    }catch(e){ /* ignore */ }
+  }, [activeEvent])
+
+  // Periodic refresh of code info when an onCampus event is active AND in voting phase
+  useEffect(()=>{
+    let timer
+    fetchCodeInfo()
+    if(activeEvent?.votingMode === 'onCampus' && activeEvent?.status === 'voting'){
+      timer = setInterval(fetchCodeInfo, 30000) // refresh every 30s during voting
+    }
+    return ()=>{ if(timer) clearInterval(timer) }
+  }, [activeEvent, fetchCodeInfo])
+
+  // 1-second countdown timer and auto-refresh on expiry (only during voting)
+  useEffect(()=>{
+    if(!activeEvent || activeEvent.votingMode !== 'onCampus' || activeEvent.status !== 'voting' || !codeInfo.expiresAt) { setCodeRemaining(null); return }
+    const tick = async ()=>{
+      const ms = new Date(codeInfo.expiresAt).getTime() - Date.now()
+      const remain = Math.max(0, Math.floor(ms/1000))
+      setCodeRemaining(remain)
+      if(remain === 0){
+        await fetchCodeInfo()
+      }
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return ()=> clearInterval(id)
+  }, [activeEvent, codeInfo.expiresAt, fetchCodeInfo])
+
+  const formatRemain = (s)=>{
+    if(s==null) return '—'
+    const mm = String(Math.floor(s/60)).padStart(2,'0')
+    const ss = String(s%60).padStart(2,'0')
+    return `${mm}:${ss}`
+  }
+
+  const onRotateCode = useCallback(async ()=>{
+    if(!activeEvent) return
+    try{
+      setIsRotating(true)
+      await rotateOnCampusCode(activeEvent._id)
+      await fetchCodeInfo()
+      alert('Code rotated')
+    }catch(err){
+      alert(err?.response?.data?.message || 'Failed to rotate code')
+    }finally{
+      setIsRotating(false)
+    }
+  }, [activeEvent, fetchCodeInfo])
+
+
   // --- Handlers ---
   const handleNavigation = useCallback((view) => {
     setActiveView(view)
@@ -289,7 +361,7 @@ export default function AdminDashboard(){
     try{
       await createEvent({ ...newEvent, BallotImageFiles: ballotFiles })
       alert('Event created successfully!')
-      setNewEvent({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single' })
+      setNewEvent({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single', votingMode:'online', codeRotationMinutes:15 })
       setBallotFiles([])
       
       const updated = await listEvents()
@@ -300,6 +372,54 @@ export default function AdminDashboard(){
     }finally{
       setIsCreating(false)
     }
+  }
+
+  // Load initial times for the active event into the editor state
+  useEffect(()=>{
+    if(!activeEvent) return
+    setEditTimes({
+      RegEndTime: activeEvent.RegEndTime ? new Date(activeEvent.RegEndTime).toISOString().slice(0,16) : '',
+      VoteStartTime: activeEvent.VoteStartTime ? new Date(activeEvent.VoteStartTime).toISOString().slice(0,16) : '',
+      VoteEndTime: activeEvent.VoteEndTime ? new Date(activeEvent.VoteEndTime).toISOString().slice(0,16) : '',
+    })
+  },[activeEvent])
+
+  const onSaveTimes = async ()=>{
+    if(!activeEvent) return
+    try{
+      setSavingTimes(true)
+      await updateEventTimes({ EventID: activeEvent._id, ...editTimes })
+      alert('Event times updated')
+      const refreshed = await listEvents()
+      setEvents(refreshed)
+      const updated = refreshed.find(e=>e._id===activeEvent._id)
+      if(updated) setActiveEvent(updated)
+    }catch(err){
+      alert(err?.response?.data?.message || 'Failed to update times')
+    }finally{ setSavingTimes(false) }
+  }
+
+  const onApplyDeltas = async () => {
+    if(!activeEvent) return
+    const parseDelta = (v)=>{ const n = parseInt(v,10); return isNaN(n)?0:n }
+    const regEnd = new Date(activeEvent.RegEndTime)
+    const voteStart = new Date(activeEvent.VoteStartTime)
+    const voteEnd = new Date(activeEvent.VoteEndTime)
+    regEnd.setMinutes(regEnd.getMinutes() + parseDelta(editTimes.RegEndDelta))
+    voteStart.setMinutes(voteStart.getMinutes() + parseDelta(editTimes.VoteStartDelta))
+    voteEnd.setMinutes(voteEnd.getMinutes() + parseDelta(editTimes.VoteEndDelta))
+    try{
+      setSavingTimes(true)
+      await updateEventTimes({ EventID: activeEvent._id, RegEndTime: regEnd.toISOString(), VoteStartTime: voteStart.toISOString(), VoteEndTime: voteEnd.toISOString() })
+      alert('Event times updated')
+      const refreshed = await listEvents()
+      setEvents(refreshed)
+      const updated = refreshed.find(e=>e._id===activeEvent._id)
+      if(updated) setActiveEvent(updated)
+      setEditTimes({ RegEndDelta:'', VoteStartDelta:'', VoteEndDelta:'' })
+    }catch(err){
+      alert(err?.response?.data?.message || 'Failed to apply changes')
+    }finally{ setSavingTimes(false) }
   }
 
   // Hook to get the current mode for chart text color
@@ -483,7 +603,8 @@ export default function AdminDashboard(){
         <CreateIcon className="w-6 h-6 mr-3" />
         {NAV_ITEMS.CREATE}
       </h2>
-      <form onSubmit={onCreateEvent} className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Event creation form */}
+      <form onSubmit={onCreateEvent} className={`p-6 rounded-xl ${BG_CARD} shadow-md border border-gray-200 dark:border-gray-700 space-y-4`}>
         {/* Title */}
         <input className={`${INPUT_CLASS} lg:col-span-2`} placeholder="Event Title (e.g., Annual Board Election)" value={newEvent.Title} onChange={e=>setNewEvent({...newEvent, Title:e.target.value})} required/>
         
@@ -514,6 +635,21 @@ export default function AdminDashboard(){
           <input type="file" multiple onChange={e=>setBallotFiles(Array.from(e.target.files))} className={`${INPUT_CLASS.replace('p-3','p-2')} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300 dark:hover:file:bg-gray-600`} />
           <p className={`text-xs ${TEXT_SECONDARY} mt-1`}>Selected files: {ballotFiles.length}</p>
         </div>
+
+        {/* Voting Mode */}
+        <div>
+          <label className={`text-sm font-semibold ${TEXT_PRIMARY}`}>Voting Mode</label>
+          <select value={newEvent.votingMode} onChange={(e)=>setNewEvent(ne=>({...ne, votingMode:e.target.value}))} className={INPUT_CLASS}>
+            <option value="online">Online (email code)</option>
+            <option value="onCampus">On-Campus (rotating code)</option>
+          </select>
+        </div>
+        {newEvent.votingMode === 'onCampus' && (
+          <div>
+            <label className={`text-sm font-semibold ${TEXT_PRIMARY}`}>Code Rotation Minutes</label>
+            <input type="number" min={1} value={newEvent.codeRotationMinutes} onChange={(e)=>setNewEvent(ne=>({...ne, codeRotationMinutes: Number(e.target.value)||15}))} className={INPUT_CLASS} />
+          </div>
+        )}
 
         {/* Submit Button */}
         <div className="lg:col-span-3 pt-4">
@@ -591,8 +727,6 @@ export default function AdminDashboard(){
     }
 
     const eventStatus = activeEvent.status; // status is set in EventListItem
-
-    // Determine if we need a 3-column layout (for Rank) or 2-column layout (for Single/MultiVote with vote list)
     const isRanked = activeEvent.ElectionType === 'Rank';
     const mainColsClass = `grid lg:grid-cols-${isRanked ? 3 : 2} gap-6`;
 
@@ -602,7 +736,25 @@ export default function AdminDashboard(){
         <div className={`p-6 rounded-xl ${BG_CARD} shadow-xl border border-gray-200 dark:border-gray-700`}>
           <h3 className={`text-3xl font-extrabold ${ACCENT_PRIMARY_TEXT}`}>{activeEvent.Title}</h3>
           <p className={`${TEXT_SECONDARY} text-sm mt-1`}>Type: {activeEvent.ElectionType} | Status: <span className="font-bold">{eventStatus.toUpperCase()}</span></p>
+          {eventStatus === 'registration' && (
+            <div className={`mt-1 text-xs font-mono ${ACCENT_WARNING}`}>Registration ends in: <span className="font-bold">{timeLeft(activeEvent.RegEndTime)}</span></div>
+          )}
+          {eventStatus === 'waiting' && (
+            <div className={`mt-1 text-xs font-mono ${ACCENT_WARNING}`}>Voting starts in: <span className="font-bold">{timeLeft(activeEvent.VoteStartTime)}</span></div>
+          )}
+          {eventStatus === 'voting' && (
+            <div className={`mt-1 text-xs font-mono ${ACCENT_VIOLET}`}>Voting ends in: <span className="font-bold">{timeLeft(activeEvent.VoteEndTime)}</span></div>
+          )}
+          {eventStatus === 'finished' && (
+            <div className={`mt-1 text-xs font-mono ${ACCENT_SUCCESS}`}>Finished: {new Date(activeEvent.VoteEndTime).toLocaleString()}</div>
+          )}
         </div>
+
+        {/* Time Editor */}
+        {eventStatus !== 'finished' && renderTimeEditor()}
+
+        {/* On-Campus Code Panel */}
+        {renderOnCampusAdminPanel()}
 
         {/* Nominee Approval / Voters / Live Results - Conditional Layout */}
         <div className={mainColsClass}>
@@ -798,6 +950,36 @@ export default function AdminDashboard(){
     )
   }
 
+  // Admin code management panel inside active event view
+  const renderOnCampusAdminPanel = () => (
+    activeEvent?.votingMode === 'onCampus' && activeEvent?.status === 'voting' ? (
+      <div className={`p-4 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 mt-6`}>
+        <h4 className={`font-bold text-lg ${ACCENT_PRIMARY_TEXT} mb-2`}>On-Campus Voting Code</h4>
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <div className={`text-sm ${TEXT_SECONDARY}`}>Current Code</div>
+            <div className={`text-4xl tracking-widest font-extrabold ${ACCENT_VIOLET}`}>
+              {codeInfo.code ? `${String(codeInfo.code).slice(0,3)} ${String(codeInfo.code).slice(3,6)}` : '—'}
+            </div>
+            <div className="mt-1 flex items-center gap-3">
+              <span className={`text-xs ${TEXT_SECONDARY}`}>Expires in:</span>
+              <span className={`text-sm font-mono ${ACCENT_PRIMARY_TEXT}`}>{formatRemain(codeRemaining)}</span>
+              {codeRemaining!=null && (
+                <div className="flex-1 h-1 bg-gray-300 dark:bg-gray-700 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 dark:bg-blue-400 transition-all"
+                    style={{ width: codeInfo.expiresAt ? `${Math.max(0, Math.min(100, ((new Date(codeInfo.expiresAt).getTime() - Date.now()) / ((activeEvent.codeRotationMinutes||2)*60000)) * 100))}%` : '0%' }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <button onClick={onRotateCode} disabled={isRotating} className={`px-4 py-2 rounded font-bold ${isRotating?'bg-gray-300 text-gray-600':'bg-blue-600 text-white hover:bg-blue-500'}`}>{isRotating?'Rotating...':'Rotate Code'}</button>
+        </div>
+      </div>
+    ) : null
+  )
+
   // --- Main Content Renderer ---
   const renderActiveContent = () => {
     if (activeEvent) {
@@ -820,6 +1002,26 @@ export default function AdminDashboard(){
     }
   };
 
+  const renderTimeEditor = () => (
+    <div className={`p-6 rounded-xl ${BG_CARD} shadow-xl border border-gray-200 dark:border-gray-700`}>
+      <h4 className={`font-bold text-xl ${ACCENT_PRIMARY_TEXT} mb-4`}>Adjust Event Times (Minutes Delta)</h4>
+      <p className={`text-xs ${TEXT_SECONDARY} mb-4`}>Enter minutes to extend (+) or shorten (-) each phase relative to current times.</p>
+      <div className="grid md:grid-cols-3 gap-4">
+        <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Reg End Δ (min)
+          <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.RegEndDelta||''} onChange={e=>setEditTimes({...editTimes, RegEndDelta:e.target.value})} placeholder="e.g. 5" />
+        </label>
+        <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Vote Start Δ (min)
+          <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.VoteStartDelta||''} onChange={e=>setEditTimes({...editTimes, VoteStartDelta:e.target.value})} placeholder="e.g. -3" />
+        </label>
+        <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Vote End Δ (min)
+          <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.VoteEndDelta||''} onChange={e=>setEditTimes({...editTimes, VoteEndDelta:e.target.value})} placeholder="e.g. 10" />
+        </label>
+      </div>
+      <div className="mt-4 flex justify-end">
+        <button onClick={onApplyDeltas} disabled={savingTimes} className={`px-5 py-2 rounded font-bold ${savingTimes?'bg-gray-300 text-gray-600':'bg-green-600 text-white hover:bg-green-500'}`}>{savingTimes?'Applying...':'Apply Minutes Changes'}</button>
+      </div>
+    </div>
+  )
 
   return (
     <div className={`min-h-screen ${BG_BODY} ${TEXT_PRIMARY} font-sans flex flex-col lg:flex-row`}>

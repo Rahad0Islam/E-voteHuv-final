@@ -6,7 +6,8 @@ import {
   api as apiClient, 
   logout,
   // campaign api helpers
-  listCampaignPosts, createCampaignPost, reactCampaignPost, addCampaignComment, deleteCampaignPost, deleteCampaignComment
+  listCampaignPosts, createCampaignPost, reactCampaignPost, addCampaignComment, deleteCampaignPost, deleteCampaignComment,
+  sendOnlineVoteCode
 } from '../lib/api' 
 import { getVoters } from '../lib/votersApi' 
 import { io } from 'socket.io-client'
@@ -178,6 +179,8 @@ export default function UserDashboard(){
   const [isVoterRegistered, setIsVoterRegistered] = useState(false)
   const [isNomineeRegistered, setIsNomineeRegistered] = useState(false)
   const [isSubmittingVote, setIsSubmittingVote] = useState(false)
+  const [voteCode, setVoteCode] = useState('')
+  const [sendingCode, setSendingCode] = useState(false)
   
   // Event Metrics state (used for event detail view)
   const [voterCount, setVoterCount] = useState(0)
@@ -414,11 +417,17 @@ export default function UserDashboard(){
   }, [activeEvent, selectedBallot, desc])
 
   const onVote = useCallback(async (e)=>{
-    if(e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
+    if(e) { e.preventDefault(); e.stopPropagation() }
     if(!activeEvent || hasVoted || isSubmittingVote) return
+    // Require code for protected modes
+    const requiresCode = activeEvent?.votingMode === 'online' || activeEvent?.votingMode === 'onCampus'
+    if(requiresCode){
+      const normalized = String(voteCode||'').trim()
+      if(normalized.length !== 6 || !/^[0-9]{6}$/.test(normalized)){
+        alert('Enter a valid 6-digit code to submit your vote')
+        return
+      }
+    }
     try{
       setIsSubmittingVote(true)
       const ElectionType = activeEvent.ElectionType
@@ -431,7 +440,7 @@ export default function UserDashboard(){
       }else{ 
         SelectedNominee = rankOrder.map((id, idx)=>({ NomineeId:id, Rank: idx+1 }))
       }
-      await giveVote({ EventID: activeEvent._id, ElectionType, SelectedNominee })
+      await giveVote({ EventID: activeEvent._id, ElectionType, SelectedNominee, code: voteCode })
       setHasVoted(true)
       alert('Voted successfully')
     }catch(err){
@@ -439,7 +448,7 @@ export default function UserDashboard(){
     } finally {
       setIsSubmittingVote(false)
     }
-  }, [activeEvent, voteSelection, rankOrder, hasVoted, isSubmittingVote])
+  }, [activeEvent, voteSelection, rankOrder, hasVoted, isSubmittingVote, voteCode])
 
   // Optimized ballot selection handler
   const handleBallotSelection = useCallback((ballot, e) => {
@@ -509,10 +518,13 @@ export default function UserDashboard(){
     }
   }, [navigate])
 
-  // Determine vote button disabled state
-  const isVoteDisabled = activeEvent?.ElectionType === 'Rank' 
+  // Determine vote button disabled state (include code requirement for protected modes)
+  const selectionInvalid = activeEvent?.ElectionType === 'Rank' 
     ? rankOrder.length === 0 
-    : Object.keys(voteSelection).length === 0;
+    : Object.keys(voteSelection).length === 0
+  const requiresCode = activeEvent?.votingMode === 'online' || activeEvent?.votingMode === 'onCampus'
+  const codeInvalid = requiresCode ? !(String(voteCode||'').trim().length === 6 && /^[0-9]{6}$/.test(String(voteCode||'').trim())) : false
+  const isVoteDisabled = selectionInvalid || codeInvalid
 
   // --- Campaign Posts: fetch when activeEvent changes & define missing handlers (fix blank page) ---
   useEffect(()=>{
@@ -626,6 +638,22 @@ export default function UserDashboard(){
       setCampaignError(err?.response?.data?.message || 'Failed to delete comment')
     }
   }, [activeEvent])
+
+  // Define requestVoteCode so voting view can call it
+  const requestVoteCode = useCallback(async () => {
+    try{
+      if (!activeEvent) return
+      if (activeEvent?.votingMode !== 'online') return
+      setSendingCode(true)
+      await sendOnlineVoteCode(activeEvent._id)
+      alert('Verification code sent to your email')
+    }catch(err){
+      alert(err?.response?.data?.message || 'Failed to send code')
+    }finally{
+      setSendingCode(false)
+    }
+  }, [activeEvent, setSendingCode])
+
 
   // --- Rendering Functions ---
 
@@ -965,6 +993,22 @@ export default function UserDashboard(){
                 })}
               </div>
               
+              {/* Voting Code for online mode */}
+              {activeEvent?.votingMode === 'online' && (
+                <div className="flex items-center gap-3">
+                  <input value={voteCode} onChange={e=>setVoteCode(e.target.value)} placeholder="Enter 6-digit code" className="px-3 py-2 rounded border border-gray-300 dark:border-gray-700" />
+                  <button type="button" disabled={sendingCode} onClick={requestVoteCode} className={`px-3 py-2 rounded text-sm ${sendingCode?'bg-gray-300 text-gray-600':'bg-blue-600 text-white hover:bg-blue-500'}`}>Send Code</button>
+                </div>
+              )}
+
+              {/* Voting Code for onCampus mode */}
+              {activeEvent?.votingMode === 'onCampus' && (
+                <div className="flex items-center gap-3">
+                  <input value={voteCode} onChange={e=>setVoteCode(e.target.value)} placeholder="Enter current on-campus code" className="px-3 py-2 rounded border border-gray-300 dark:border-gray-700" />
+                  <span className="text-xs text-gray-600 dark:text-gray-400">Ask admin or supervisor for the current code.</span>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                 {(!hasVoted && isVoteDisabled) && (
                   <span className={`text-sm ${ACCENT_ERROR} font-mono text-center sm:text-right`}>
@@ -1101,7 +1145,7 @@ export default function UserDashboard(){
                   🎥 Videos
                   <input type="file" multiple accept="video/*" onChange={onVideosChange} className="hidden" />
                 </label>
-                <button type="submit" disabled={postingLoading} className={`px-4 py-2 text-xs rounded font-bold ${postingLoading? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed':'bg-[#1E3A8A] text-white hover:bg-[#3B82F6]'} transition`}>
+                <button type="submit" disabled={postingLoading} className={`px-4 py-2 text-xs rounded font-bold ${postingLoading? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed':'bg-[#1E3A8A] text-white hover:bg-[#3B82F6]'}`}>
                   {postingLoading? 'Posting...' : 'Post'}
                 </button>
               </div>

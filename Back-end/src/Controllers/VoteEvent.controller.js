@@ -10,6 +10,7 @@ import { FileDelete, FileUpload } from "../Utils/Cloudinary.js";
 import mongoose from "mongoose";
 import { getIO } from "../socket.js";
 import { User } from "../Models/User.Model.js";
+import { transporter } from "../Middleware/Email.config.js";
 
 
 const CreateVoteEvent = AsynHandler(async(req,res)=>{
@@ -18,9 +19,9 @@ const CreateVoteEvent = AsynHandler(async(req,res)=>{
     if (!CreateBy || req.user.Role!=="admin") {throw new ApiError(401, "Unauthorized: Admin not found");}
 
     const {Title="",Description="",RegEndTime,VoteStartTime,
-    VoteEndTime,ElectionType}=req.body;
+    VoteEndTime,ElectionType, votingMode, codeRotationMinutes}=req.body;
 
-   if (!Title || !RegEndTime || !VoteStartTime || !VoteEndTime || !ElectionType) {
+   if (!Title || !RegEndTime || !VoteStartTime || !VoteEndTime || !ElectionType || !votingMode) {
     throw new ApiError(402, "All fields are required");
    }
 
@@ -61,7 +62,9 @@ const CreateVoteEvent = AsynHandler(async(req,res)=>{
         VoteStartTime: voteStart,
         VoteEndTime: voteEnd,
         ElectionType,
-        CreateBy
+        CreateBy,
+        votingMode,
+        codeRotationMinutes: votingMode==='onCampus' ? (parseInt(codeRotationMinutes,10)||2) : undefined
     })
    
     console.log("Event Create succesfully!");
@@ -204,32 +207,34 @@ const VoterRegister=AsynHandler(async(req,res)=>{
 
 
 const GivenVote=AsynHandler(async(req,res)=>{
-     
-    const {EventID,ElectionType,SelectedNominee}=req.body;
-
+    const {EventID,ElectionType,SelectedNominee, code} = req.body;
     const UserID=req.user?._id;
-    if(!EventID || !UserID || !ElectionType || !SelectedNominee){
-        throw new ApiError(401,"EventId and user invalid! ");
-    }
-
-    // New: ensure a non-empty selection
-    if(!Array.isArray(SelectedNominee) || SelectedNominee.length === 0){
-        throw new ApiError(400, "Please select at least one nominee before submitting your vote");
-    }
-    if(ElectionType === 'Single' && SelectedNominee.length !== 1){
-        throw new ApiError(400, "Please select exactly one nominee for Single vote");
-    }
-
+    if(!EventID || !UserID || !ElectionType || !SelectedNominee){ throw new ApiError(401,"EventId and user invalid! "); }
+    if(!Array.isArray(SelectedNominee) || SelectedNominee.length === 0){ throw new ApiError(400, "Please select at least one nominee before submitting your vote"); }
+    if(ElectionType === 'Single' && SelectedNominee.length !== 1){ throw new ApiError(400, "Please select exactly one nominee for Single vote"); }
 
     const DetailsVoteReg=await VoterReg.findOne({EventID,UserID});
-     
+    if(!DetailsVoteReg){ throw new ApiError(401,"You are not Registered!"); }
 
-    if(!DetailsVoteReg){
-        throw new ApiError(401,"You are not Registered!");
+    const Event = await VoteEvent.findById(EventID);
+    if (!Event) { throw new ApiError(401, "Vote event not found"); }
+
+    // Code verification before any tally operations
+    if(Event.votingMode === 'online'){
+        if(!code || !/^[0-9]{6}$/.test(String(code))){ throw new ApiError(400,'Valid 6-digit code required'); }
+        if(!DetailsVoteReg.emailCode){ throw new ApiError(403,'Request code first'); }
+        if(new Date() > new Date(DetailsVoteReg.emailCodeExpiresAt)){ throw new ApiError(403,'Code expired'); }
+        if(String(DetailsVoteReg.emailCode) !== String(code)){ throw new ApiError(403,'Invalid code'); }
+    } else if(Event.votingMode === 'onCampus') {
+        if(!code || !/^[0-9]{6}$/.test(String(code))){ throw new ApiError(400,'Current on-campus code required'); }
+        if(!Event.currentVoteCode || !Event.currentCodeExpiresAt){ throw new ApiError(403,'Voting code not active'); }
+        if(new Date() > new Date(Event.currentCodeExpiresAt)){ throw new ApiError(403,'Code expired'); }
+        if(String(Event.currentVoteCode) !== String(code)){ throw new ApiError(403,'Invalid code'); }
     }
 
+    if(DetailsVoteReg.hasVoted){ throw new ApiError(401,"you are already given vote! "); }
 
-    // Validate nominees
+    // Validate nominees after code check
     const approvedNominees = await NomineeReg.find({ EventID, Approved: true }).select('UserID').lean();
     const approvedIds = approvedNominees.map(n => String(n.UserID));
     for (const nominee of SelectedNominee) {
@@ -238,26 +243,10 @@ const GivenVote=AsynHandler(async(req,res)=>{
         }
     }
 
-
-    if(DetailsVoteReg.hasVoted){
-        throw new ApiError(401,"you are already given vote! ");
-    }
-    
-     const Event = await VoteEvent.findById(EventID);
-      if (!Event) {
-           throw new ApiError(401, "Vote event not found");
-       }
-        console.log("rahad");
-        const now = new Date();
-        const start = new Date(Event.VoteStartTime);
-        const end = new Date(Event.VoteEndTime);
-
-        console.log("Now:", now);
-        console.log("Start:", start);
-        console.log("End:", end);
-
-        if (now < start || now > end) {
-        throw new ApiError(403, "Voting is not currently open");}
+    const now = new Date();
+    const start = new Date(Event.VoteStartTime);
+    const end = new Date(Event.VoteEndTime);
+    if (now < start || now > end) { throw new ApiError(403, "Voting is not currently open"); }
 
     // Tally-only update
     const eventObjId = new mongoose.Types.ObjectId(EventID);
@@ -651,7 +640,153 @@ const ListEvents = AsynHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, filtered, 'Events fetched'));
 });
 
+// Generate a 6-digit code
+const genCode = ()=> String(Math.floor(100000 + Math.random()*900000));
 
+// Admin: rotate onCampus vote code
+const RotateOnCampusCode = AsynHandler(async (req, res) => {
+  const { EventID } = req.body;
+  if (!EventID) throw new ApiError(401, 'EventID required');
+  if (req.user?.Role !== 'admin') throw new ApiError(403, 'Admin only');
+  const ev = await VoteEvent.findById(EventID);
+  if(!ev) throw new ApiError(404, 'Event not found');
+  if(ev.votingMode !== 'onCampus') throw new ApiError(400, 'Not onCampus mode');
+  const now = new Date();
+  const start = new Date(ev.VoteStartTime);
+  const end = new Date(ev.VoteEndTime);
+  if (now < start || now > end) {
+    // Outside voting window: do not rotate
+    throw new ApiError(400, 'Voting is not active');
+  }
+  const code = genCode();
+  const mins = ev.codeRotationMinutes || 2;
+  ev.currentVoteCode = code;
+  ev.currentCodeExpiresAt = new Date(Date.now() + mins*60000);
+  await ev.save({ validateBeforeSave:false });
+  try{ getIO().to(String(EventID)).emit('codeRotated', { eventId: EventID, expiresAt: ev.currentCodeExpiresAt }); }catch(e){}
+  return res.status(200).json(new ApiResponse(200, { code, expiresAt: ev.currentCodeExpiresAt }, 'Code rotated'));
+});
+
+// User: request email code for online vote
+const SendOnlineVoteCode = AsynHandler(async (req, res) => {
+  const { EventID } = req.body;
+  if (!EventID) throw new ApiError(401, 'EventID required');
+  const ev = await VoteEvent.findById(EventID);
+  if(!ev) throw new ApiError(404, 'Event not found');
+  if(ev.votingMode !== 'online') throw new ApiError(400, 'Not online mode');
+  const code = genCode();
+  const userId = req.user?._id;
+  const reg = await VoterReg.findOne({ EventID, UserID: userId });
+  if(!reg) throw new ApiError(401,'Not registered');
+  reg.emailCode = code;
+  reg.emailCodeExpiresAt = new Date(Date.now()+10*60000);
+  await reg.save({ validateBeforeSave:false });
+  try{
+    await transporter.sendMail({
+      from: 'E-VoteHub <no-reply@evotehub>',
+      to: req.user?.Email,
+      subject: `Your voting code for ${ev.Title}`,
+      text: `Use this 6-digit code to vote: ${code}. It expires in 10 minutes.`
+    });
+  }catch(e){
+    console.error('Email send error', e);
+    throw new ApiError(500,'Failed to send email code');
+  }
+  return res.status(200).json(new ApiResponse(200, { sent:true }, 'Code sent'));
+});
+
+// Get current on-campus vote code (admin)
+const GetCurrentVoteCode = AsynHandler(async (req, res) => {
+  const EventID = req.body?.EventID || req.query?.EventID;
+  if (!EventID) throw new ApiError(401, 'EventID required');
+  if (req.user?.Role !== 'admin') throw new ApiError(403, 'Admin only');
+  const ev = await VoteEvent.findById(EventID);
+  if (!ev) throw new ApiError(404, 'Event not found');
+  if (ev.votingMode !== 'onCampus') throw new ApiError(400, 'Not onCampus mode');
+
+  const now = new Date();
+  const start = new Date(ev.VoteStartTime);
+  const end = new Date(ev.VoteEndTime);
+  const votingActive = now >= start && now <= end;
+
+  if (!votingActive) {
+    // Clear any leftover code when not active
+    if (ev.currentVoteCode || ev.currentCodeExpiresAt) {
+      ev.currentVoteCode = null;
+      ev.currentCodeExpiresAt = null;
+      await ev.save({ validateBeforeSave:false });
+    }
+    return res.status(200).json(new ApiResponse(200, { currentVoteCode: '', currentCodeExpiresAt: null }, 'Voting not active'));
+  }
+
+  // Voting is active: generate or refresh if expired
+  const needsRotate = !ev.currentVoteCode || !ev.currentCodeExpiresAt || now >= new Date(ev.currentCodeExpiresAt);
+  if (needsRotate) {
+    const code = genCode();
+    const mins = ev.codeRotationMinutes || 2;
+    ev.currentVoteCode = code;
+    ev.currentCodeExpiresAt = new Date(Date.now() + mins * 60000);
+    await ev.save({ validateBeforeSave: false });
+    try { getIO().to(String(EventID)).emit('codeRotated', { eventId: EventID, expiresAt: ev.currentCodeExpiresAt }); } catch (e) {}
+  }
+
+  return res.status(200).json(new ApiResponse(200, {
+    currentVoteCode: ev.currentVoteCode || '',
+    currentCodeExpiresAt: ev.currentCodeExpiresAt || null
+  }, needsRotate ? 'Code rotated' : 'Current code'));
+});
+
+// Admin: update event times
+const UpdateEventTimes = AsynHandler(async (req, res) => {
+  const { EventID, RegEndTime, VoteStartTime, VoteEndTime } = req.body || {}
+  if (!EventID) throw new ApiError(401, 'EventID required')
+  if (req.user?.Role !== 'admin') throw new ApiError(403, 'Admin only')
+
+  const ev = await VoteEvent.findById(EventID)
+  if(!ev) throw new ApiError(404, 'Event not found')
+
+  // Parse provided fields; if not provided, keep current
+  const regEnd = RegEndTime ? new Date(RegEndTime) : ev.RegEndTime
+  const voteStart = VoteStartTime ? new Date(VoteStartTime) : ev.VoteStartTime
+  const voteEnd = VoteEndTime ? new Date(VoteEndTime) : ev.VoteEndTime
+
+  if ([regEnd, voteStart, voteEnd].some(d => !(d instanceof Date) || isNaN(d.getTime()))) {
+    throw new ApiError(400, 'Invalid date format')
+  }
+  // Logical ordering: RegEnd <= VoteStart < VoteEnd
+  if (regEnd > voteStart) throw new ApiError(400, 'RegEndTime must be before or equal to VoteStartTime')
+  if (voteStart >= voteEnd) throw new ApiError(400, 'VoteStartTime must be before VoteEndTime')
+
+  ev.RegEndTime = regEnd
+  ev.VoteStartTime = voteStart
+  ev.VoteEndTime = voteEnd
+
+  // Handle onCampus code state based on new window
+  if (ev.votingMode === 'onCampus') {
+    const now = new Date()
+    const active = now >= voteStart && now <= voteEnd
+    if (!active) {
+      // clear codes when not active
+      ev.currentVoteCode = null
+      ev.currentCodeExpiresAt = null
+    } else {
+      // ensure code exists when active
+      const expired = !ev.currentVoteCode || !ev.currentCodeExpiresAt || now >= new Date(ev.currentCodeExpiresAt)
+      if (expired) {
+        const code = genCode()
+        const mins = ev.codeRotationMinutes || 2
+        ev.currentVoteCode = code
+        ev.currentCodeExpiresAt = new Date(Date.now() + mins*60000)
+        try{ getIO().to(String(EventID)).emit('codeRotated', { eventId: EventID, expiresAt: ev.currentCodeExpiresAt }); }catch(e){}
+      }
+    }
+  }
+
+  await ev.save({ validateBeforeSave: false })
+  return res.status(200).json(new ApiResponse(200, ev, 'Event times updated'))
+})
+
+// Extend GivenVote to verify code
 export{
     CreateVoteEvent,
     NomineeRegister,
@@ -670,6 +805,9 @@ export{
     GetUserVoteStatus,
     GetVoterRegStatus,
     GetNomineeRegStatus,
-    GetMyVoteHistory
-
+    GetMyVoteHistory,
+    RotateOnCampusCode,
+    SendOnlineVoteCode,
+    GetCurrentVoteCode,
+    UpdateEventTimes
 }

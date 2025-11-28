@@ -4,7 +4,7 @@ import { jwtVerification } from "../Middleware/Authentication.Middleware.js";
 import { CountingVote, CreateVoteEvent, GetAllBallotImage,
      GetApprovedNominee, GetAvailableBallotImage, GetPendingNominee,
       GetUsedBallotImage, GetVoter, getVoterPerticipate,
-       GivenVote, NomineeApproved, NomineeRegister, VoterRegister, ListEvents, GetUserVoteStatus, GetVoterRegStatus, GetNomineeRegStatus, GetMyVoteHistory } from "../Controllers/VoteEvent.controller.js";
+       GivenVote, NomineeApproved, NomineeRegister, VoterRegister, ListEvents, GetUserVoteStatus, GetVoterRegStatus, GetNomineeRegStatus, GetMyVoteHistory, RotateOnCampusCode, SendOnlineVoteCode, GetCurrentVoteCode, UpdateEventTimes } from "../Controllers/VoteEvent.controller.js";
 const router=Router();
 
 router.route("/VoteEvent").post(jwtVerification,
@@ -36,6 +36,9 @@ router.route("/getPendingNominee").get(jwtVerification,GetPendingNominee)
 router.route("/getVoterDetails").get(jwtVerification,GetVoter)
 router.route("/getVoterPerticipate").get(jwtVerification,getVoterPerticipate)
 router.route('/myVoteHistory').get(jwtVerification, GetMyVoteHistory)
-
+router.route('/rotateOnCampusCode').post(jwtVerification, RotateOnCampusCode)
+router.route('/sendOnlineVoteCode').post(jwtVerification, SendOnlineVoteCode)
+router.route('/getCurrentVoteCode').get(jwtVerification, GetCurrentVoteCode)
+router.route('/updateEventTimes').patch(jwtVerification, UpdateEventTimes)
 
 export default router;

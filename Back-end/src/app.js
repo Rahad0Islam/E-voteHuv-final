@@ -5,18 +5,18 @@ import cors from 'cors'
 
 const app=express()
 
-// app.use(cors({
-//     origin:(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*'),   //Specifies which domain is allowed to access backend
-//     credentials:true  //Allows the browser to send cookies, 
-//     // authorization headers, or TLS client certificates along with the request.
-
-//     //The browser is allowed to include cookies
-//     //  (like session tokens or refresh tokens) in cross-origin requests.
-// }))
 app.use(cors({
-   origin: "https://e-vote-huv-final.vercel.app",
-   credentials: true
-}));
+    origin:(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : '*'),   //Specifies which domain is allowed to access backend
+    credentials:true  //Allows the browser to send cookies, 
+    // authorization headers, or TLS client certificates along with the request.
+
+    //The browser is allowed to include cookies
+    //  (like session tokens or refresh tokens) in cross-origin requests.
+}))
+// app.use(cors({
+//    origin: "https://e-vote-huv-final.vercel.app",
+//    credentials: true
+// }));
 
 app.use(express.json({limit:"16kb"}))  
    // parse JSON payloads in POST, PUT, or PATCH requests-  > req.body directly.

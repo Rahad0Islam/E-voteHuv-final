@@ -40,7 +40,16 @@ const EventSchema=new mongoose.Schema({
         type:mongoose.Schema.Types.ObjectId,
         ref:"User",
         required:true
-     }
+     },
+     votingMode:{
+       type:String,
+       enum:["online","onCampus"],
+       required:true
+     },
+     // Optional fields to support onCampus rotating code
+     codeRotationMinutes: { type: Number, default: 2 },
+     currentVoteCode: { type: String, default: null },
+     currentCodeExpiresAt: { type: Date, default: null }
 
 },{timestamps:true});
 

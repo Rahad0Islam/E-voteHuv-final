@@ -91,6 +91,10 @@ export async function createEvent(payload){
   fd.append('VoteStartTime', payload.VoteStartTime)
   fd.append('VoteEndTime', payload.VoteEndTime)
   fd.append('ElectionType', payload.ElectionType)
+  fd.append('votingMode', payload.votingMode)
+  if (payload.votingMode === 'onCampus' && payload.codeRotationMinutes) {
+    fd.append('codeRotationMinutes', String(payload.codeRotationMinutes))
+  }
   ;(payload.BallotImageFiles || []).forEach(file => fd.append('BallotImage', file))
   const res = await api.post('/api/V1/admin/VoteEvent', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
   return res.data?.data
@@ -131,7 +135,18 @@ export async function nomineeRegister(payload){
   return res.data?.data
 }
 
+export async function sendOnlineVoteCode(eventId){
+  const res = await api.post('/api/V1/admin/sendOnlineVoteCode', { EventID: eventId })
+  return res.data?.data
+}
+
+export async function rotateOnCampusCode(eventId){
+  const res = await api.post('/api/V1/admin/rotateOnCampusCode', { EventID: eventId })
+  return res.data?.data
+}
+
 export async function giveVote(payload){
+  // payload may include code
   const res = await api.post('/api/V1/admin/voting', payload)
   return res.data?.data
 }
@@ -208,5 +223,10 @@ export async function deleteCampaignPost({ eventID, postID }){
 
 export async function deleteCampaignComment({ eventID, commentID }){
   const res = await api.delete('/api/v1/post/deleteComment', { data: { eventID, commentID } })
+  return res.data?.data
+}
+
+export async function updateEventTimes({ EventID, RegEndTime, VoteStartTime, VoteEndTime }){
+  const res = await api.patch('/api/V1/admin/updateEventTimes', { EventID, RegEndTime, VoteStartTime, VoteEndTime })
   return res.data?.data
 }

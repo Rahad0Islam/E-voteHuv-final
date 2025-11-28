@@ -15,8 +15,9 @@ const VoterSchema= new mongoose.Schema({
     hasVoted: {
           type: Boolean,
           default: false
-  }
-
+  },
+  emailCode:{ type:String },
+  emailCodeExpiresAt:{ type:Date },
 
 },{timestamps:true})
 
