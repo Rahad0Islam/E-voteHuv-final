@@ -486,71 +486,40 @@ const GetUsedBallotImage=AsynHandler(async(req,res)=>{
 const GetApprovedNominee = AsynHandler(async (req, res) => {
   const EventID = req.body?.EventID || req.query?.EventID;
 
-  if (!EventID) {
-    throw new ApiError(401, "EventID is required!");
-  }
+  if (!EventID) { throw new ApiError(401, "EventID is required!"); }
 
   const NomineeDetails = await NomineeReg.find({ EventID, Approved: true })
-    .select("UserID SelectedBalot")
-    .populate('UserID', 'FullName UserName ProfileImage');
-
-  // if (!NomineeDetails || NomineeDetails.length === 0) {
-  //   throw new ApiError(401, "No approved nominees found for this event");
-  // }
+    .select("UserID SelectedBalot Description Approved")
+    .populate('UserID', 'FullName UserName ProfileImage Email');
 
   return res.status(200).json(
-    new ApiResponse(200, {
-      NomineeDetails:NomineeDetails||[],
-      count: NomineeDetails?.length||0
-    }, "Approved nominees retrieved successfully")
+    new ApiResponse(200, { NomineeDetails:NomineeDetails||[], count: NomineeDetails?.length||0 }, "Approved nominees retrieved successfully")
   );
 });
-
 
 const GetPendingNominee = AsynHandler(async (req, res) => {
   const EventID = req.body?.EventID || req.query?.EventID;
 
-  if (!EventID) {
-    throw new ApiError(401, "EventID is required!");
-  }
+  if (!EventID) { throw new ApiError(401, "EventID is required!"); }
 
   const NomineeDetails = await NomineeReg.find({ EventID, Approved: false })
-    .select("UserID SelectedBalot")
-    .populate('UserID', 'FullName UserName ProfileImage');
-
-  // if (!NomineeDetails || NomineeDetails.length === 0) {
-  //   throw new ApiError(401, "No pending nominees ");
-  // }
+    .select("UserID SelectedBalot Description Approved")
+    .populate('UserID', 'FullName UserName ProfileImage Email');
 
   return res.status(200).json(
-    new ApiResponse(200, {
-      NomineeDetails: NomineeDetails || [],
-      count: NomineeDetails?.length||0
-    }, "Pending nominees retrieved successfully")
+    new ApiResponse(200, { NomineeDetails: NomineeDetails || [], count: NomineeDetails?.length||0 }, "Pending nominees retrieved successfully")
   );
 });
 
 
 const GetVoter=AsynHandler(async(req,res)=>{
-     const EventID = req.body?.EventID || req.query?.EventID;
+  const EventID = req.body?.EventID || req.query?.EventID;
 
-  if (!EventID) {
-    throw new ApiError(401, "EventID is required!");
-  }
+  if (!EventID) { throw new ApiError(401, "EventID is required!"); }
 
-  const VoterDetails = await VoterReg.find({ EventID}).select("UserID").populate('UserID', 'FullName UserName ProfileImage');
+  const VoterDetails = await VoterReg.find({ EventID}).select("UserID hasVoted").populate('UserID', 'FullName UserName ProfileImage Email');
 
-  // if (!VoterDetails || VoterDetails.length === 0) {
-  //   throw new ApiError(401, "No voter found");
-  // }
-
-  return res.status(200).json(
-    new ApiResponse(200, {
-      VoterDetails:VoterDetails||[],
-      count: VoterDetails?.length||0
-    }, "Voter details retrived successfully")
-  );
-
+  return res.status(200).json(new ApiResponse(200, { VoterDetails:VoterDetails||[], count: VoterDetails?.length||0 }, "Voter details retrived successfully"));
 })
 
 const getVoterPerticipate=AsynHandler(async(req,res)=>{
@@ -561,10 +530,6 @@ const getVoterPerticipate=AsynHandler(async(req,res)=>{
   }
 
   const GivenVoter = await VoterReg.find({ EventID,hasVoted:true}).select("UserID").populate('UserID', 'FullName UserName ProfileImage');
-
-  // if (!GivenVoter || GivenVoter.length === 0) {
-  //   throw new ApiError(401, "voter found");
-  // }
 
   const nonVoter=await VoterReg.find({ EventID,hasVoted:false}).select("UserID").populate('UserID', 'FullName UserName ProfileImage');
   
@@ -815,7 +780,7 @@ const RemoveVoter = AsynHandler(async (req, res) => {
   if (req.user?.Role !== 'admin') throw new ApiError(403, 'Admin only');
   const voter = await VoterReg.findOne({ EventID, UserID: VoterID });
   if (!voter) throw new ApiError(404, 'Voter registration not found');
-  if (voter.hasVoted) throw new ApiError(409, 'Cannot remove voter who has already cast a vote');
+  // Allow removal even if has voted per latest requirements
   await VoterReg.deleteOne({ _id: voter._id });
   return res.status(200).json(new ApiResponse(200, { removed: true }, 'Voter removed'));
 });
@@ -846,6 +811,30 @@ const RemoveNominee = AsynHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, { removed: true }, 'Nominee removed'));
 });
 
+// New: Unapprove an already approved nominee without deleting their registration
+const NomineeUnapprove = AsynHandler(async (req, res) => {
+  const { EventID, NomineeID } = req.body || {};
+  if (!EventID || !NomineeID) throw new ApiError(400, 'EventID and NomineeID required');
+  if (req.user?.Role !== 'admin') throw new ApiError(403, 'Admin only');
+  const nominee = await NomineeReg.findOne({ EventID, UserID: NomineeID });
+  if (!nominee) throw new ApiError(404, 'Nominee registration not found');
+  if (!nominee.Approved) return res.status(200).json(new ApiResponse(200, { unchanged:true }, 'Nominee already unapproved'));
+  const ev = await VoteEvent.findById(EventID);
+  if (!ev) throw new ApiError(404, 'Event not found');
+  // Release ballot back to available
+  const ballot = nominee.SelectedBalot;
+  if (ballot?.publicId) {
+    // remove from used list
+    ev.UsedBallotImage = ev.UsedBallotImage.filter(img => img.publicId !== ballot.publicId);
+    const alreadyAvailable = ev.BallotImage.some(img => img.publicId === ballot.publicId);
+    if (!alreadyAvailable) { ev.BallotImage.push({ url: ballot.url, publicId: ballot.publicId }); }
+    await ev.save({ validateBeforeSave:false });
+  }
+  nominee.Approved = false;
+  await nominee.save({ validateBeforeSave:false });
+  return res.status(200).json(new ApiResponse(200, { unapproved:true }, 'Nominee approval removed'));
+});
+
 // Extend GivenVote to verify code
 export{
     CreateVoteEvent,
@@ -872,5 +861,6 @@ export{
     UpdateEventTimes,
     RemoveVoter,
     RemoveNominee,
+    NomineeUnapprove,
     AddBallotImages
 }

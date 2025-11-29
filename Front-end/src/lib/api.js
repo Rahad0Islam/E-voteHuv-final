@@ -260,3 +260,16 @@ export async function addBallotImages({ EventID, files = [] }){
   const res = await api.post('/api/V1/admin/addBallotImages', fd, { headers:{ 'Content-Type':'multipart/form-data' } })
   return res.data?.data
 }
+
+export async function removeVoter({ EventID, VoterID }){
+  const res = await api.delete('/api/V1/admin/removeVoter', { data: { EventID, VoterID } })
+  return res.data?.data
+}
+export async function removeNominee({ EventID, NomineeID }){
+  const res = await api.delete('/api/V1/admin/removeNominee', { data: { EventID, NomineeID } })
+  return res.data?.data
+}
+export async function unapproveNominee({ EventID, NomineeID }){
+  const res = await api.post('/api/V1/admin/unapproveNominee', { EventID, NomineeID })
+  return res.data?.data
+}

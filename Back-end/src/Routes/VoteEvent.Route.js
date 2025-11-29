@@ -4,7 +4,7 @@ import { jwtVerification } from "../Middleware/Authentication.Middleware.js";
 import { CountingVote, CreateVoteEvent, GetAllBallotImage,
      GetApprovedNominee, GetAvailableBallotImage, GetPendingNominee,
       GetUsedBallotImage, GetVoter, getVoterPerticipate,
-       GivenVote, NomineeApproved, NomineeRegister, VoterRegister, ListEvents, GetUserVoteStatus, GetVoterRegStatus, GetNomineeRegStatus, GetMyVoteHistory, RotateOnCampusCode, SendOnlineVoteCode, GetCurrentVoteCode, UpdateEventTimes, RemoveVoter, RemoveNominee, AddBallotImages } from "../Controllers/VoteEvent.controller.js";
+       GivenVote, NomineeApproved, NomineeRegister, VoterRegister, ListEvents, GetUserVoteStatus, GetVoterRegStatus, GetNomineeRegStatus, GetMyVoteHistory, RotateOnCampusCode, SendOnlineVoteCode, GetCurrentVoteCode, UpdateEventTimes, RemoveVoter, RemoveNominee, AddBallotImages, NomineeUnapprove } from "../Controllers/VoteEvent.controller.js";
 const router=Router();
 
 router.route("/VoteEvent").post(jwtVerification,
@@ -44,5 +44,8 @@ router.route('/addBallotImages').post(jwtVerification,
     upload.fields([{ name:'BallotImage', maxCount:10 }]),
     AddBallotImages
 )
+router.route('/removeVoter').delete(jwtVerification, RemoveVoter)
+router.route('/removeNominee').delete(jwtVerification, RemoveNominee)
+router.route('/unapproveNominee').post(jwtVerification, NomineeUnapprove)
 
 export default router;

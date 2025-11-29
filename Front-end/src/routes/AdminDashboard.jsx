@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { listEvents, countVote, getPendingNominees, approveNominee, createEvent, api as apiClient, listCampaignPosts, deleteCampaignPost, deleteCampaignComment, rotateOnCampusCode, updateEventTimes, addBallotImages } from '../lib/api'
+import { listEvents, countVote, getPendingNominees, approveNominee, createEvent, api as apiClient, listCampaignPosts, deleteCampaignPost, deleteCampaignComment, rotateOnCampusCode, updateEventTimes, addBallotImages, getNominees, removeVoter, removeNominee, unapproveNominee } from '../lib/api'
 import { getVoters } from '../lib/votersApi'
 import { io } from 'socket.io-client'
 import { Bar, Doughnut } from 'react-chartjs-2' // Keep Bar and Doughnut for now, but Bar will be used for Live Tally
@@ -160,6 +160,7 @@ export default function AdminDashboard(){
   const [activeView, setActiveView] = useState(NAV_ITEMS.DASHBOARD)
   const [counts, setCounts] = useState({ simple: [], rank: [] })
   const [pending, setPending] = useState([])
+  const [approved, setApproved] = useState([])
   const [voters, setVoters] = useState([])
 
   // event creation state
@@ -222,33 +223,27 @@ export default function AdminDashboard(){
   useEffect(()=>{
     if(!activeEvent) return
     setLoadingEvent(true)
-
-    // Reset counts and lists
     setCounts({ simple: [], rank: [] })
     setPending([])
+    setApproved([])
     setVoters([])
-    setCampaignPosts([]) // Reset posts on new event selection
-
+    setCampaignPosts([])
     const fetchEventData = async () => {
-        try{
-            // Fetch initial data
-            const [c, p, v, posts] = await Promise.all([
-                countVote(activeEvent._id),
-                getPendingNominees(activeEvent._id),
-                getVoters(activeEvent._id),
-                listCampaignPosts(activeEvent._id) // Fetch campaign posts
-            ])
-            setCounts({ simple: c.NomineeListForSingleAndMultiVote, rank: c.NomineeListForRank })
-            setPending(p)
-            setVoters(v)
-            setCampaignPosts(posts) // Set fetched posts
-        } catch(err){
-            console.error("Failed to fetch event data:", err)
-        } finally {
-            setLoadingEvent(false)
-        }
+      try {
+        const [c, p, a, v, posts] = await Promise.all([
+          countVote(activeEvent._id).catch(()=>({ NomineeListForSingleAndMultiVote:[], NomineeListForRank:[] })),
+          getPendingNominees(activeEvent._id).catch(()=>[]),
+          getNominees(activeEvent._id).catch(()=>[]),
+          getVoters(activeEvent._id).catch(()=>[]),
+          listCampaignPosts(activeEvent._id).catch(()=>[])
+        ])
+        setCounts({ simple: c.NomineeListForSingleAndMultiVote||[], rank: c.NomineeListForRank||[] })
+        setPending(p)
+        setApproved(a)
+        setVoters(v)
+        setCampaignPosts(posts)
+      } catch(e){ console.error('Fetch event data failed', e) } finally { setLoadingEvent(false) }
     }
-    
     fetchEventData()
 
     // Setup Socket IO for real-time updates (only if voting is live)
@@ -265,9 +260,9 @@ export default function AdminDashboard(){
           try{
             const c = await countVote(activeEvent._id)
             setCounts({ simple: c.NomineeListForSingleAndMultiVote, rank: c.NomineeListForRank })
-          }catch(err){
-             console.error("Socket vote update failed:", err)
-          }
+            const a = await getNominees(activeEvent._id)
+            setApproved(a)
+          }catch(err){ console.error("Socket vote update failed:", err) }
         }
       })
     }
@@ -350,9 +345,9 @@ export default function AdminDashboard(){
     try{
       await approveNominee({ EventID: activeEvent._id, NomineeID: uid })
       setPending(p => p.filter(x => (x.UserID?._id || x.UserID) !== uid))
-    }catch(err){
-      alert(err?.response?.data?.message || 'Approval failed')
-    }
+      const a = await getNominees(activeEvent._id)
+      setApproved(a)
+    }catch(err){ alert(err?.response?.data?.message || 'Approval failed') }
   }
 
   const onCreateEvent = async (e)=>{
@@ -762,6 +757,34 @@ export default function AdminDashboard(){
             {/* Column 1 & 2: Nominee Approval / Voters */}
             <div className={`lg:col-span-${isRanked ? 2 : 1} space-y-6`}>
                 
+                {/* Approved Nominees Panel */}
+                <div className={`p-6 rounded-xl ${BG_CARD} shadow-xl border border-gray-200 dark:border-gray-700`}>
+                  <h4 className={`font-bold text-xl ${ACCENT_PRIMARY_TEXT} mb-4 border-b border-gray-200 dark:border-gray-700 pb-2`}>
+                    <span className="mr-2">✅</span> Approved Nominees ({approved.length})
+                  </h4>
+                  <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
+                    {approved.map(n => {
+                      const id = n.UserID?._id || n.UserID
+                      return (
+                        <div key={id} className={`flex items-start justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 ${BG_DARK_CARD}`}>
+                          <div className="flex items-center gap-3 cursor-pointer" onClick={()=> openProfile(n.UserID, n.Description)}>
+                            <img src={n.UserID?.ProfileImage || 'https://placehold.co/40x40/d1d5db/4b5563?text=N'} className="w-10 h-10 rounded-full object-cover" />
+                            <div>
+                              <div className="text-sm font-semibold">{n.UserID?.FullName || id}</div>
+                              <div className={`text-xs ${TEXT_SECONDARY}`}>@{n.UserID?.UserName}</div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <button onClick={()=> onUnapprove(id)} className={`px-3 py-1 text-[10px] rounded bg-yellow-500 hover:bg-yellow-600 text-white font-semibold`}>Unapprove</button>
+                            <button onClick={()=> onRemoveNominee(id)} className={`px-3 py-1 text-[10px] rounded bg-red-600 hover:bg-red-700 text-white font-semibold`}>Remove</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {approved.length===0 && <div className={`text-sm ${TEXT_SECONDARY} p-3 text-center`}>No approved nominees yet.</div>}
+                  </div>
+                </div>
+
                 {/* Pending Nominees (Only relevant during registration/waiting) */}
                 {eventStatus !== 'finished' && (
                     <div className={`p-6 rounded-xl ${BG_CARD} shadow-xl border border-gray-200 dark:border-gray-700`}>
@@ -798,14 +821,18 @@ export default function AdminDashboard(){
                         <span className="mr-2">👥</span> Registered Voters ({voters.length})
                     </h4>
                     <div className="space-y-3 max-h-72 overflow-y-auto pr-2">
-                        {voters.map(v => (
-                            // This element uses BG_DARK_CARD, which is now fixed
-                            <div key={v.UserID?._id || v.UserID} className={`flex items-center gap-3 text-sm p-3 rounded-lg border border-gray-200 dark:border-gray-700 ${BG_DARK_CARD}`}>
-                                <img src={v.UserID?.ProfileImage || 'https://placehold.co/32x32/d1d5db/4b5563?text=V'} className="w-8 h-8 rounded-full object-cover" alt="Voter Profile"/>
-                                <span className="font-medium">{v.UserID?.FullName || v.UserID}</span>
-                                {/* <span className={`text-xs ${TEXT_SECONDARY}`}>({v.UserID?.Email})</span> */}
+                        {voters.map(v => {
+                          const uid = v.UserID?._id || v.UserID
+                          return (
+                            <div key={uid} className={`flex items-center justify-between gap-3 text-sm p-3 rounded-lg border border-gray-200 dark:border-gray-700 ${BG_DARK_CARD}`}>
+                                <div className="flex items-center gap-3 cursor-pointer" onClick={()=>openProfile(v.UserID)}>
+                                  <img src={v.UserID?.ProfileImage || 'https://placehold.co/32x32/d1d5db/4b5563?text=V'} className="w-8 h-8 rounded-full object-cover" alt="Voter Profile"/>
+                                  <span className="font-medium">{v.UserID?.FullName || uid}</span>
+                                </div>
+                                <button onClick={()=>handleRemoveVoter(uid)} className="text-[10px] px-2 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700">Remove</button>
                             </div>
-                        ))}
+                          )
+                        })}
                     </div>
                 </div>
             </div>
@@ -1067,23 +1094,54 @@ export default function AdminDashboard(){
   )
 
   // Define handler for initial ballot file selection
-  const handleBallotFilesChange = (e)=>{ setBallotFiles(Array.from(e.target.files||[])) }
-
-  // New handlers and state for appending ballot images
+  const [profileModal, setProfileModal] = useState({ open:false, user:null, description:'' })
+  const openProfile = (user, description='') => setProfileModal({ open:true, user, description })
+  const closeProfile = () => setProfileModal(m => ({ ...m, open:false }))
   const [appendBallotFiles, setAppendBallotFiles] = useState([])
   const [isAppendingBallots, setIsAppendingBallots] = useState(false)
-  const handleAppendBallotsChange = (e)=>{ setAppendBallotFiles(Array.from(e.target.files||[])) }
+  const handleAppendBallotsChange = (e)=> setAppendBallotFiles(Array.from(e.target.files||[]))
   const onAppendBallots = async (e)=>{
     e.preventDefault()
     if(!activeEvent) return
-    if(appendBallotFiles.length===0){ alert('Select ballot images first'); return }
+    if(appendBallotFiles.length===0) return
     try{
       setIsAppendingBallots(true)
       await addBallotImages({ EventID: activeEvent._id, files: appendBallotFiles })
       alert('Ballot images appended')
       setAppendBallotFiles([])
-    }catch(err){ alert(err?.response?.data?.message || 'Failed to append ballot images') }
-    finally{ setIsAppendingBallots(false) }
+    }catch(err){ alert(err?.response?.data?.message || 'Failed to append ballot images') }finally{ setIsAppendingBallots(false) }
+  }
+
+  const onUnapprove = async (uid) => {
+    if(!activeEvent) return
+    if(!confirm('Remove approval for this nominee?')) return
+    try{
+      await unapproveNominee({ EventID: activeEvent._id, NomineeID: uid })
+      const found = approved.find(x => (x.UserID?._id || x.UserID) === uid)
+      setApproved(list => list.filter(x => (x.UserID?._id || x.UserID) !== uid))
+      if(found){
+        setPending(list => [...list, { UserID: found.UserID, SelectedBalot: found.SelectedBalot, Description: found.Description }])
+      }
+    }catch(err){ alert(err?.response?.data?.message || 'Failed to unapprove nominee') }
+  }
+
+  const onRemoveNominee = async (uid) => {
+    if(!activeEvent) return
+    if(!confirm('Completely remove this nominee?')) return
+    try{
+      await removeNominee({ EventID: activeEvent._id, NomineeID: uid })
+      setApproved(a=> a.filter(x=> (x.UserID?._id || x.UserID) !== uid))
+      setPending(p=> p.filter(x=> (x.UserID?._id || x.UserID) !== uid))
+    }catch(err){ alert(err?.response?.data?.message || 'Failed to remove nominee') }
+  }
+
+  const handleRemoveVoter = async (uid) => {
+    if(!activeEvent) return
+    if(!confirm('Remove this voter?')) return
+    try{
+      await removeVoter({ EventID: activeEvent._id, VoterID: uid })
+      setVoters(v => v.filter(x => (x.UserID?._id || x.UserID) !== uid))
+    }catch(err){ alert(err?.response?.data?.message || 'Failed to remove voter') }
   }
 
   // Integrate new sections into existing render logic (example placeholder at bottom of main component render)
@@ -1171,6 +1229,24 @@ export default function AdminDashboard(){
             {renderActiveContent()}
         </div>
       </main>
+
+      {/* Profile Modal */}
+      {profileModal.open && profileModal.user && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onMouseDown={closeProfile}>
+          <div className={`w-full max-w-md p-6 rounded-xl ${BG_CARD} border border-gray-200 dark:border-gray-700 shadow-xl relative`} onMouseDown={e=>e.stopPropagation()}>
+            <button onClick={closeProfile} className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 dark:hover:text-gray-300">✕</button>
+            <div className="flex items-center gap-4 mb-4">
+              <img src={profileModal.user?.ProfileImage || 'https://placehold.co/80'} className="w-20 h-20 rounded-full object-cover" />
+              <div>
+                <div className={`text-xl font-bold ${ACCENT_PRIMARY_TEXT}`}>{profileModal.user?.FullName}</div>
+                <div className={`text-xs ${TEXT_SECONDARY}`}>@{profileModal.user?.UserName}</div>
+              </div>
+            </div>
+            {profileModal.description && <div className="text-sm whitespace-pre-line mb-4">{profileModal.description}</div>}
+            <div className="text-[10px] ${TEXT_SECONDARY}">User ID: {profileModal.user?._id}</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
