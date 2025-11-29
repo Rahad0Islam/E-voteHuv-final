@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { listEvents, countVote, getPendingNominees, approveNominee, createEvent, api as apiClient, listCampaignPosts, deleteCampaignPost, deleteCampaignComment, rotateOnCampusCode, updateEventTimes } from '../lib/api'
+import { listEvents, countVote, getPendingNominees, approveNominee, createEvent, api as apiClient, listCampaignPosts, deleteCampaignPost, deleteCampaignComment, rotateOnCampusCode, updateEventTimes, addBallotImages } from '../lib/api'
 import { getVoters } from '../lib/votersApi'
 import { io } from 'socket.io-client'
 import { Bar, Doughnut } from 'react-chartjs-2' // Keep Bar and Doughnut for now, but Bar will be used for Live Tally
@@ -632,7 +632,7 @@ export default function AdminDashboard(){
         {/* Ballot Images */}
         <div className="lg:col-span-3">
           <label className={`block text-sm ${TEXT_SECONDARY} font-medium mb-2`}>Ballot Images (For Nominee Selection) - Max 10</label>
-          <input type="file" multiple onChange={e=>setBallotFiles(Array.from(e.target.files))} className={`${INPUT_CLASS.replace('p-3','p-2')} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300 dark:hover:file:bg-gray-600`} />
+          <input type="file" multiple onChange={handleBallotFilesChange} className={`${INPUT_CLASS.replace('p-3','p-2')} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300 dark:hover:file:bg-gray-600`} />
           <p className={`text-xs ${TEXT_SECONDARY} mt-1`}>Selected files: {ballotFiles.length}</p>
         </div>
 
@@ -1003,26 +1003,90 @@ export default function AdminDashboard(){
   };
 
   const renderTimeEditor = () => (
-    <div className={`p-6 rounded-xl ${BG_CARD} shadow-xl border border-gray-200 dark:border-gray-700`}>
-      <h4 className={`font-bold text-xl ${ACCENT_PRIMARY_TEXT} mb-4`}>Adjust Event Times (Minutes Delta)</h4>
-      <p className={`text-xs ${TEXT_SECONDARY} mb-4`}>Enter minutes to extend (+) or shorten (-) each phase relative to current times.</p>
-      <div className="grid md:grid-cols-3 gap-4">
-        <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Reg End Δ (min)
-          <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.RegEndDelta||''} onChange={e=>setEditTimes({...editTimes, RegEndDelta:e.target.value})} placeholder="e.g. 5" />
-        </label>
-        <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Vote Start Δ (min)
-          <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.VoteStartDelta||''} onChange={e=>setEditTimes({...editTimes, VoteStartDelta:e.target.value})} placeholder="e.g. -3" />
-        </label>
-        <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Vote End Δ (min)
-          <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.VoteEndDelta||''} onChange={e=>setEditTimes({...editTimes, VoteEndDelta:e.target.value})} placeholder="e.g. 10" />
-        </label>
+    <div className={`p-6 rounded-xl ${BG_CARD} shadow-xl border border-gray-200 dark:border-gray-700 space-y-6`}>
+      <div>
+        <h4 className={`font-bold text-xl ${ACCENT_PRIMARY_TEXT} mb-4`}>Adjust Event Times (Minutes Delta)</h4>
+        <p className={`text-xs ${TEXT_SECONDARY} mb-4`}>Enter minutes to extend (+) or shorten (-) each phase relative to current times.</p>
+        <div className="grid md:grid-cols-3 gap-4">
+          <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Reg End Δ (min)
+            <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.RegEndDelta||''} onChange={e=>setEditTimes({...editTimes, RegEndDelta:e.target.value})} placeholder="e.g. 5" />
+          </label>
+          <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Vote Start Δ (min)
+            <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.VoteStartDelta||''} onChange={e=>setEditTimes({...editTimes, VoteStartDelta:e.target.value})} placeholder="e.g. -3" />
+          </label>
+          <label className={`text-sm ${TEXT_SECONDARY} font-medium`}>Vote End Δ (min)
+            <input type="number" className={`block mt-1 ${INPUT_CLASS}`} value={editTimes.VoteEndDelta||''} onChange={e=>setEditTimes({...editTimes, VoteEndDelta:e.target.value})} placeholder="e.g. 10" />
+          </label>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button onClick={onApplyDeltas} disabled={savingTimes} className={`px-5 py-2 rounded font-bold ${savingTimes?'bg-gray-300 text-gray-600':'bg-green-600 text-white hover:bg-green-500'}`}>{savingTimes?'Applying...':'Apply Minutes Changes'}</button>
+        </div>
       </div>
-      <div className="mt-4 flex justify-end">
-        <button onClick={onApplyDeltas} disabled={savingTimes} className={`px-5 py-2 rounded font-bold ${savingTimes?'bg-gray-300 text-gray-600':'bg-green-600 text-white hover:bg-green-500'}`}>{savingTimes?'Applying...':'Apply Minutes Changes'}</button>
+      {/* Append Ballot Images Section */}
+      <div className={`p-6 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800 relative overflow-hidden`}> 
+        <div className="absolute inset-0 pointer-events-none opacity-10 bg-[radial-gradient(circle_at_30%_30%,#3B82F6,transparent_60%)]" />
+        <h5 className={`font-bold text-lg mb-2 flex items-center gap-2 ${ACCENT_VIOLET}`}>
+          <span>🖼️</span> Append Additional Ballot Images
+        </h5>
+        <p className={`text-xs ${TEXT_SECONDARY} mb-4 leading-relaxed`}>Upload extra ballot images if you need more options for nominees. Existing ballots remain untouched. Recommended aspect ratio: square.</p>
+        <form onSubmit={onAppendBallots} className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <label className="flex-1">
+              <div className={`rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 p-4 text-center cursor-pointer hover:border-violet-500 dark:hover:border-violet-400 transition-colors`}> 
+                <input type="file" multiple accept="image/*" onChange={handleAppendBallotsChange} className="hidden" id="appendBallotsInput" />
+                <label htmlFor="appendBallotsInput" className="cursor-pointer block">
+                  <div className={`text-sm font-semibold mb-1 ${ACCENT_VIOLET}`}>Select Images</div>
+                  <div className={`text-[10px] ${TEXT_SECONDARY}`}>PNG / JPG / JPEG</div>
+                  {appendBallotFiles.length>0 && <div className={`mt-2 text-xs font-mono ${TEXT_PRIMARY}`}>{appendBallotFiles.length} selected</div>}
+                </label>
+              </div>
+            </label>
+            <div className="flex flex-col justify-end gap-2">
+              <button type="submit" disabled={isAppendingBallots || appendBallotFiles.length===0} className={`px-5 py-2 rounded-lg font-semibold text-sm ${BTN_PRIMARY} disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2`}> 
+                {isAppendingBallots ? <span className="animate-pulse">Uploading...</span> : <><span>➕</span> Add Ballot Images</>} 
+              </button>
+              {isAppendingBallots && <div className="h-1 w-full bg-gray-200 dark:bg-gray-700 rounded overflow-hidden"><div className="h-full bg-violet-600 dark:bg-violet-400 animate-[pulse_1.2s_linear_infinite]" style={{width:'100%'}}/></div>}
+            </div>
+          </div>
+          {appendBallotFiles.length>0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+              {appendBallotFiles.map((f,i)=>{
+                const url = URL.createObjectURL(f)
+                return (
+                  <div key={i} className="relative group">
+                    <img src={url} alt="preview" className="w-full aspect-square object-cover rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm" />
+                    <button type="button" onClick={()=> setAppendBallotFiles(arr=> arr.filter((_,idx)=> idx!==i))} className="absolute top-1 right-1 bg-red-600/80 hover:bg-red-700 text-white text-[10px] px-1 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </form>
       </div>
     </div>
   )
 
+  // Define handler for initial ballot file selection
+  const handleBallotFilesChange = (e)=>{ setBallotFiles(Array.from(e.target.files||[])) }
+
+  // New handlers and state for appending ballot images
+  const [appendBallotFiles, setAppendBallotFiles] = useState([])
+  const [isAppendingBallots, setIsAppendingBallots] = useState(false)
+  const handleAppendBallotsChange = (e)=>{ setAppendBallotFiles(Array.from(e.target.files||[])) }
+  const onAppendBallots = async (e)=>{
+    e.preventDefault()
+    if(!activeEvent) return
+    if(appendBallotFiles.length===0){ alert('Select ballot images first'); return }
+    try{
+      setIsAppendingBallots(true)
+      await addBallotImages({ EventID: activeEvent._id, files: appendBallotFiles })
+      alert('Ballot images appended')
+      setAppendBallotFiles([])
+    }catch(err){ alert(err?.response?.data?.message || 'Failed to append ballot images') }
+    finally{ setIsAppendingBallots(false) }
+  }
+
+  // Integrate new sections into existing render logic (example placeholder at bottom of main component render)
   return (
     <div className={`min-h-screen ${BG_BODY} ${TEXT_PRIMARY} font-sans flex flex-col lg:flex-row`}>
       

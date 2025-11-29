@@ -786,6 +786,66 @@ const UpdateEventTimes = AsynHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, ev, 'Event times updated'))
 })
 
+// Add endpoint to append new ballot images after event creation.
+const AddBallotImages = AsynHandler(async (req, res) => {
+  const { EventID } = req.body
+  if(!EventID) throw new ApiError(400,'EventID required')
+  if(req.user?.Role !== 'admin') throw new ApiError(403,'Admin only')
+  const ev = await VoteEvent.findById(EventID)
+  if(!ev) throw new ApiError(404,'Event not found')
+  // Upload new images
+  const files = Array.isArray(req.files?.BallotImage) ? req.files.BallotImage : []
+  if(files.length === 0) throw new ApiError(400,'No files provided')
+  const added = []
+  for(const f of files){
+    try{ const up = await FileUpload(f.path); if(up){ added.push({ url: up.url, publicId: up.public_id }) } }catch(e){ console.error('Ballot add upload failed', e?.message||e) }
+  }
+  if(added.length === 0) throw new ApiError(500,'Upload failed')
+  // Append to available ballot list (avoid duplicates by publicId)
+  const existingIds = new Set(ev.BallotImage.map(i=>i.publicId))
+  added.forEach(img => { if(!existingIds.has(img.publicId)) ev.BallotImage.push(img) })
+  await ev.save({ validateBeforeSave:false })
+  return res.status(200).json(new ApiResponse(200, { addedCount: added.length, BallotImage: ev.BallotImage }, 'Ballot images added'))
+})
+
+// Add admin removal controllers
+const RemoveVoter = AsynHandler(async (req, res) => {
+  const { EventID, VoterID } = req.body || {};
+  if (!EventID || !VoterID) throw new ApiError(400, 'EventID and VoterID required');
+  if (req.user?.Role !== 'admin') throw new ApiError(403, 'Admin only');
+  const voter = await VoterReg.findOne({ EventID, UserID: VoterID });
+  if (!voter) throw new ApiError(404, 'Voter registration not found');
+  if (voter.hasVoted) throw new ApiError(409, 'Cannot remove voter who has already cast a vote');
+  await VoterReg.deleteOne({ _id: voter._id });
+  return res.status(200).json(new ApiResponse(200, { removed: true }, 'Voter removed'));
+});
+
+const RemoveNominee = AsynHandler(async (req, res) => {
+  const { EventID, NomineeID } = req.body || {};
+  if (!EventID || !NomineeID) throw new ApiError(400, 'EventID and NomineeID required');
+  if (req.user?.Role !== 'admin') throw new ApiError(403, 'Admin only');
+  const nominee = await NomineeReg.findOne({ EventID, UserID: NomineeID });
+  if (!nominee) throw new ApiError(404, 'Nominee registration not found');
+  const ev = await VoteEvent.findById(EventID);
+  if (!ev) throw new ApiError(404, 'Event not found');
+  const ballot = nominee.SelectedBalot;
+  // Remove nominee document
+  await NomineeReg.deleteOne({ _id: nominee._id });
+  // Release ballot image back to available list if it exists in used list
+  if (ballot?.publicId) {
+    const wasUsed = ev.UsedBallotImage.some(img => img.publicId === ballot.publicId);
+    if (wasUsed) {
+      ev.UsedBallotImage = ev.UsedBallotImage.filter(img => img.publicId !== ballot.publicId);
+      const stillInAvailable = ev.BallotImage.some(img => img.publicId === ballot.publicId);
+      if (!stillInAvailable) {
+        ev.BallotImage.push({ url: ballot.url, publicId: ballot.publicId });
+      }
+      await ev.save({ validateBeforeSave: false });
+    }
+  }
+  return res.status(200).json(new ApiResponse(200, { removed: true }, 'Nominee removed'));
+});
+
 // Extend GivenVote to verify code
 export{
     CreateVoteEvent,
@@ -809,5 +869,8 @@ export{
     RotateOnCampusCode,
     SendOnlineVoteCode,
     GetCurrentVoteCode,
-    UpdateEventTimes
+    UpdateEventTimes,
+    RemoveVoter,
+    RemoveNominee,
+    AddBallotImages
 }

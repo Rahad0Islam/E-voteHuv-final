@@ -252,3 +252,11 @@ export async function reactComment({ eventID, commentID, like=false, dislike=fal
   const res = await api.post('/api/v1/post/reactComment', { eventID, commentID, like, dislike })
   return res.data?.data
 }
+
+export async function addBallotImages({ EventID, files = [] }){
+  const fd = new FormData()
+  fd.append('EventID', EventID)
+  files.forEach(f => fd.append('BallotImage', f))
+  const res = await api.post('/api/V1/admin/addBallotImages', fd, { headers:{ 'Content-Type':'multipart/form-data' } })
+  return res.data?.data
+}

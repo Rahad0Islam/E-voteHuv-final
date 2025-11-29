@@ -4,7 +4,7 @@ import { jwtVerification } from "../Middleware/Authentication.Middleware.js";
 import { CountingVote, CreateVoteEvent, GetAllBallotImage,
      GetApprovedNominee, GetAvailableBallotImage, GetPendingNominee,
       GetUsedBallotImage, GetVoter, getVoterPerticipate,
-       GivenVote, NomineeApproved, NomineeRegister, VoterRegister, ListEvents, GetUserVoteStatus, GetVoterRegStatus, GetNomineeRegStatus, GetMyVoteHistory, RotateOnCampusCode, SendOnlineVoteCode, GetCurrentVoteCode, UpdateEventTimes } from "../Controllers/VoteEvent.controller.js";
+       GivenVote, NomineeApproved, NomineeRegister, VoterRegister, ListEvents, GetUserVoteStatus, GetVoterRegStatus, GetNomineeRegStatus, GetMyVoteHistory, RotateOnCampusCode, SendOnlineVoteCode, GetCurrentVoteCode, UpdateEventTimes, RemoveVoter, RemoveNominee, AddBallotImages } from "../Controllers/VoteEvent.controller.js";
 const router=Router();
 
 router.route("/VoteEvent").post(jwtVerification,
@@ -40,5 +40,9 @@ router.route('/rotateOnCampusCode').post(jwtVerification, RotateOnCampusCode)
 router.route('/sendOnlineVoteCode').post(jwtVerification, SendOnlineVoteCode)
 router.route('/getCurrentVoteCode').get(jwtVerification, GetCurrentVoteCode)
 router.route('/updateEventTimes').patch(jwtVerification, UpdateEventTimes)
+router.route('/addBallotImages').post(jwtVerification,
+    upload.fields([{ name:'BallotImage', maxCount:10 }]),
+    AddBallotImages
+)
 
 export default router;
