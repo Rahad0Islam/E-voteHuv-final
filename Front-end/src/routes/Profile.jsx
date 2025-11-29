@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { changePassword, updateCoverImage as apiUpdateCoverImage, updateProfileImage as apiUpdateProfileImage } from '../lib/api'
 
 // --- THEME-AWARE COLOR MAPPING (Copied from Home.jsx for consistency) ---
@@ -29,6 +30,83 @@ const COLOR_MAP = {
 };
 // --- END COLOR MAP ---
 
+// --- Inline SVG Icons for Footer ---
+const MailIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.83 1.83 0 0 1-2.06 0L2 7"></path></svg>);
+
+// --- Footer Component ---
+const Footer = () => (
+  <footer className={`${COLOR_MAP.SCI_BG} border-t border-gray-200 dark:border-gray-700 mt-16 py-12`}>
+    <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8">
+      
+      {/* 1. Logo and Mission - FIXED TO MATCH NAVBAR/HERO STYLE */}
+      <div className="col-span-2 md:col-span-1">
+        <div className="flex items-center mb-4">
+            {/* Theme-aware E-VoteHub text using gradient */}
+            <span 
+                className={`text-xl font-bold bg-clip-text text-transparent 
+                    bg-gradient-to-r 
+                    from-gray-900 via-gray-700 to-gray-500 
+                dark:from-white dark:to-gray-500`}
+            >
+                E-VoteHub
+            </span>
+        </div>
+        <p className={`text-xs ${COLOR_MAP.TEXT_SECONDARY} max-w-xs`}>
+          Unifying secure online voting with dynamic social campaigning to drive democratic engagement.
+        </p>
+      </div>
+
+      {/* 2. Navigation Links */}
+      <div>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Platform</h4>
+        <ul className="space-y-2 text-sm">
+          <li><Link to="/" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Home</Link></li>
+          <li><Link to="/user" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Dashboard</Link></li>
+          <li><Link to="/profile" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Profile Settings</Link></li>
+        </ul>
+      </div>
+
+      {/* 3. Resources/Legal Links */}
+      <div>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Resources</h4>
+        <ul className="space-y-2 text-sm">
+          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Security Policy</a></li>
+          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Terms of Service</a></li>
+          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Privacy Statement</a></li>
+        </ul>
+      </div>
+
+      {/* 4. Contact */}
+      <div>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Contact</h4>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            rahad@gmail.com
+        </p>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            autanu2020@gmail.com
+        </p>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            shajjad@gmail.com
+        </p>
+        <p className="text-xs text-slate-500 dark:text-slate-600">
+            [Shajalal University of Science and Technology]
+        </p>
+      </div>
+
+    </div>
+
+    {/* Bottom Copyright and ID */}
+    <div className="max-w-6xl mx-auto px-4 mt-10 pt-6 border-t border-gray-300 dark:border-slate-700 text-center">
+      <p className="text-xs text-slate-500 dark:text-slate-600">
+        &copy; {new Date().getFullYear()} E-VoteHub. All rights reserved
+      </p>
+    </div>
+  </footer>
+);
+
 // Mock API Functions (Unchanged)
 const setUser = (user) => {
   localStorage.setItem('user', JSON.stringify(user));
@@ -50,8 +128,8 @@ const StatusMessage = ({ message, type }) => {
     // Brighter, more consistent error
     typeClasses = 'bg-red-700/80 border-red-500 text-white shadow-red-900/60 backdrop-blur-sm'; 
   } else if (type === 'success') {
-    // Theme accent success
-    typeClasses = `bg-[${ACCENT_PRIMARY_HEX}]/80 dark:bg-[${ACCENT_SECONDARY_HEX}]/80 border-[${ACCENT_PRIMARY_HEX}] dark:border-[${ACCENT_SECONDARY_HEX}] text-white shadow-lg shadow-[${ACCENT_PRIMARY_HEX}]/40 dark:shadow-[${ACCENT_SECONDARY_HEX}]/40 backdrop-blur-sm`;
+    // Green success styling
+    typeClasses = 'bg-green-600/80 dark:bg-green-700/80 border-green-500 dark:border-green-600 text-white shadow-lg shadow-green-500/40 dark:shadow-green-700/40 backdrop-blur-sm';
   } else {
       return null;
   }
@@ -195,140 +273,161 @@ export default function Profile(){
 
 
   return (
-    <div className={`max-w-6xl mx-auto px-4 py-8 relative ${COLOR_MAP.BG_COLOR} min-h-screen`}>
-      <StatusMessage message={message} type={messageType} />
+    <div className={`min-h-screen flex flex-col ${COLOR_MAP.BG_COLOR}`}>
+      <div className={`max-w-6xl mx-auto w-full px-4 py-8 relative flex-1`}>
+        <StatusMessage message={message} type={messageType} />
 
-      {/* --- Header / Cover Area --- */}
-      <div className={`relative rounded-xl overflow-hidden shadow-2xl ${shadowEffectClass} border ${cardBorderClass} mb-8`}>
-        
-        {/* Cover Image */}
-        <div className={`aspect-[3/1] ${panelBgClass}`}>
-          {safeUser.CoverImage ? (
-            <img 
-              src={safeUser.CoverImage} 
-              className="w-full h-full object-cover transition-transform duration-500 hover:scale-[1.01] opacity-90" 
-              alt="cover" 
-            />
-          ) : (
-            <div className={`w-full h-full flex items-center justify-center ${COLOR_MAP.TEXT_SECONDARY} text-lg font-mono`}>
-              [COVER: UPLOAD REQUIRED]
-            </div>
-          )}
-        </div>
-        
-        {/* Change Cover Button */}
-        <button 
-          onClick={onPickCover} 
-          disabled={busy} 
-          className={`absolute top-4 right-4 z-10 ${accentButtonClass(true)}`}
-        >
-          {busy ? 'SYNCHRONIZING...' : 'CHANGE COVER'}
-        </button>
-        <input ref={coverInput} type="file" accept="image/*" className="hidden" onChange={onCoverChange} />
-
-        {/* Profile Avatar and Info Block */}
-        <div className="absolute bottom-0 rounded-full left-10 flex items-end gap-3 z-20"> 
+        {/* --- Header / Cover Area --- */}
+        <div className={`relative rounded-xl overflow-hidden shadow-2xl ${shadowEffectClass} border ${cardBorderClass} mb-8`}>
           
-        
-          <div className={`relative w-32 h-32 border-4 md:w-40 md:h-40 rounded-full overflow-hidden ${panelBgClass} shadow-2xl shadow-gray-800/30 dark:shadow-black/70 group border-white dark:border-slate-900`}>
-            {safeUser.ProfileImage ? (
+          {/* Cover Image */}
+          <div className={`aspect-[3/1] ${panelBgClass}`}>
+            {safeUser.CoverImage ? (
               <img 
-                src={safeUser.ProfileImage} 
-                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
-                alt="avatar" 
+                src={safeUser.CoverImage} 
+                className="w-full h-full object-cover transition-transform duration-500 hover:scale-[1.01] opacity-90" 
+                alt="cover" 
               />
             ) : (
-              // Fallback
-              <div className={`w-full h-full flex items-center justify-center text-5xl font-bold ${accentColorClass}`}>
-                {fullName[0]}
+              <div className={`w-full h-full flex items-center justify-center ${COLOR_MAP.TEXT_SECONDARY} text-lg font-mono`}>
+                [COVER: UPLOAD REQUIRED]
               </div>
             )}
-            
-            {/* Change Avatar Button (Overlay) */}
-            <button 
-              onClick={onPickAvatar} 
-              disabled={busy} 
-              className="absolute inset-0 w-full h-full rounded-full bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center text-white"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-camera mb-1"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5L14.5 4z"/><circle cx="12" cy="13" r="3"/></svg>
-              <span className="text-xs font-semibold">{busy ? 'UPLOADING...' : 'CHANGE AVATAR'}</span>
-            </button>
-            <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
           </div>
           
-          {/* User Display Name */}
-          <div className="pb-4 font-sans hidden md:block">
-            <div className={`text-3xl font-extrabold bg-clip-text text-transparent 
-                bg-gradient-to-r from-gray-900 to-gray-500 
-                dark:from-white dark:to-gray-400`
-            }>
-              {fullName}
-            </div>
-            <div className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} font-mono italic`}>
-              @{userName}
-            </div>
-            <div className={`mt-2 text-xs px-3 py-1 rounded-full bg-black/40 dark:bg-white/10 ${accentColorClass} font-semibold inline-block border border-gray-400/40 dark:border-slate-700/40`}>
-              ACCESS LEVEL: {role}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* --- Body / Details Area --- */}
-      <div className="mt-20 grid lg:grid-cols-3 gap-6">
-        
-        {/* About Card */}
-        <div className={`lg:col-span-2 ${panelClass}`}>
-          <h3 className={`text-xl font-bold mb-4 ${accentColorClass} border-b border-gray-200 dark:border-slate-700 pb-2 flex items-center`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user-cog mr-2"><circle cx="18" cy="15" r="3"/><path d="M21.7 16.4V15h-2.5m-2.2 0h-2.5V16.4M12 20a6 6 0 0 0-6-6H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6"/><path d="M18.8 17.5l-1.6 1.6l1.6 1.6"/></svg>
-            REGISTRY RECORD
-          </h3>
-          <div className="text-sm space-y-4 pt-2">
-            <DetailItem label="Full Name" value={safeUser.FullName} />
-            <DetailItem label="Contact Email" value={safeUser.Email} />
-            <DetailItem label="Gender Code" value={safeUser.Gender} />
-            <DetailItem label="NID / ID" value={safeUser.NID} />
-            <DetailItem label="Primary Phone" value={safeUser.PhoneNumber} />
-            <DetailItem label="Date of Birth" value={safeUser.DateOfBirth ? new Date(safeUser.DateOfBirth).toLocaleDateString('en-US') : null} />
-          </div>
-        </div>
-        
-        {/* Actions Card (Now just a Quick Access Panel) */}
-        <div className={panelClass}>
-          <h3 className={`text-xl font-bold mb-4 ${accentColorClass} border-b border-gray-200 dark:border-slate-700 pb-2 flex items-center`}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-zap mr-2"><path d="M11 20H13V13H17L7 5V12H3Z"/></svg>
-             QUICK ACTIONS
-          </h3>
-          <div className="flex flex-col gap-3 pt-2">
-            {/* BUTTON 2: Update Password (Primary Style) */}
-            <button 
-              onClick={()=> setShowPwd(v=>!v)}
-              className={accentButtonClass(true) + ` w-full flex items-center justify-center font-mono`}
-              disabled={busy}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock mr-2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              {showPwd ? 'HIDE PASSWORD FORM' : 'UPDATE PASSWORD'}
-            </button>
+          {/* Change Cover Button */}
+          <button 
+            onClick={onPickCover} 
+            disabled={busy} 
+            className={`absolute top-4 right-4 z-10 ${accentButtonClass(true)}`}
+          >
+            {busy ? 'SYNCHRONIZING...' : 'CHANGE COVER'}
+          </button>
+          <input ref={coverInput} type="file" accept="image/*" className="hidden" onChange={onCoverChange} />
+
+          {/* Profile Avatar and Info Block */}
+          <div className="absolute bottom-0 rounded-full left-10 flex items-end gap-3 z-20"> 
             
+          
+            <div className={`relative w-32 h-32 border-4 md:w-40 md:h-40 rounded-full overflow-hidden ${panelBgClass} shadow-2xl shadow-gray-800/30 dark:shadow-black/70 group border-white dark:border-slate-900`}>
+              {safeUser.ProfileImage ? (
+                <img 
+                  src={safeUser.ProfileImage} 
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" 
+                  alt="avatar" 
+                />
+              ) : (
+                // Fallback
+                <div className={`w-full h-full flex items-center justify-center text-5xl font-bold ${accentColorClass}`}>
+                  {fullName[0]}
+                </div>
+              )}
+              
+              {/* Change Avatar Button (Overlay) */}
+              <button 
+                onClick={onPickAvatar} 
+                disabled={busy} 
+                className="absolute inset-0 w-full h-full rounded-full bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center text-white"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-camera mb-1"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5L14.5 4z"/><circle cx="12" cy="13" r="3"/></svg>
+                <span className="text-xs font-semibold">{busy ? 'UPLOADING...' : 'CHANGE AVATAR'}</span>
+              </button>
+              <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
+            </div>
+            
+            {/* User Display Name */}
+            <div className="pb-4 font-sans hidden md:block">
+              <div className={`text-3xl font-extrabold bg-clip-text text-transparent 
+                  bg-gradient-to-r from-gray-900 to-gray-500 
+                  dark:from-white dark:to-gray-400`
+              }>
+                {fullName}
+              </div>
+              <div className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} font-mono italic`}>
+                @{userName}
+              </div>
+              <div className={`mt-2 text-xs px-3 py-1 rounded-full bg-black/40 dark:bg-white/10 ${accentColorClass} font-semibold inline-block border border-gray-400/40 dark:border-slate-700/40`}>
+                ACCESS LEVEL: {role}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* --- Body / Details Area --- */}
+        <div className="mt-20 grid lg:grid-cols-3 gap-6">
+          
+          {/* About Card */}
+          <div className={`lg:col-span-2 ${panelClass}`}>
+            <h3 className={`text-xl font-bold mb-4 ${accentColorClass} border-b border-gray-200 dark:border-slate-700 pb-2 flex items-center`}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-user-cog mr-2"><circle cx="18" cy="15" r="3"/><path d="M21.7 16.4V15h-2.5m-2.2 0h-2.5V16.4M12 20a6 6 0 0 0-6-6H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v6"/><path d="M18.8 17.5l-1.6 1.6l1.6 1.6"/></svg>
+              REGISTRY RECORD
+            </h3>
+            <div className="text-sm space-y-4 pt-2">
+              <DetailItem label="Full Name" value={safeUser.FullName} />
+              <DetailItem label="Contact Email" value={safeUser.Email} />
+              <DetailItem label="Gender Code" value={safeUser.Gender} />
+              <DetailItem label="NID / ID" value={safeUser.NID} />
+              <DetailItem label="Phone Number" value={safeUser.Phone || 'Not provided'} />
+              <DetailItem label="Account Role" value={safeUser.Role || 'voter'} />
+              <DetailItem label="Member Since" value={safeUser.createdAt ? new Date(safeUser.createdAt).toLocaleDateString() : 'Unknown'} />
+            </div>
+          </div>
+
+          {/* Change Password Card */}
+          <div className={`${panelClass}`}>
+            <h3 className={`text-xl font-bold mb-4 ${accentColorClass} border-b border-gray-200 dark:border-slate-700 pb-2 flex items-center`}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock mr-2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              CHANGE PASSWORD
+            </h3>
+            <div className="space-y-3 pt-2">
+              <input 
+                type={showPwd ? "text" : "password"} 
+                placeholder="Current Password" 
+                value={pwdOld}
+                onChange={(e)=> setPwdOld(e.target.value)}
+                disabled={busy}
+                className={`w-full p-2 rounded-lg border border-gray-300 dark:border-slate-700 ${panelBgClass} ${COLOR_MAP.TEXT_MAIN} placeholder-gray-400 dark:placeholder-gray-500 outline-none transition focus:ring-2 focus:ring-blue-500`}
+              />
+              <input 
+                type={showPwd ? "text" : "password"} 
+                placeholder="New Password" 
+                value={pwdNew}
+                onChange={(e)=> setPwdNew(e.target.value)}
+                disabled={busy}
+                className={`w-full p-2 rounded-lg border border-gray-300 dark:border-slate-700 ${panelBgClass} ${COLOR_MAP.TEXT_MAIN} placeholder-gray-400 dark:placeholder-gray-500 outline-none transition focus:ring-2 focus:ring-blue-500`}
+              />
+              <input 
+                type={showPwd ? "text" : "password"} 
+                placeholder="Confirm New Password" 
+                value={pwdNew2}
+                onChange={(e)=> setPwdNew2(e.target.value)}
+                disabled={busy}
+                className={`w-full p-2 rounded-lg border border-gray-300 dark:border-slate-700 ${panelBgClass} ${COLOR_MAP.TEXT_MAIN} placeholder-gray-400 dark:placeholder-gray-500 outline-none transition focus:ring-2 focus:ring-blue-500`}
+              />
+              <label className="flex items-center gap-2 cursor-pointer select-none pt-2">
+                <input 
+                  type="checkbox" 
+                  checked={showPwd}
+                  onChange={(e)=> setShowPwd(e.target.checked)}
+                  disabled={busy}
+                  className="w-4 h-4 rounded"
+                />
+                <span className={`text-xs font-medium ${COLOR_MAP.TEXT_SECONDARY}`}>Show Passwords</span>
+              </label>
+              <button 
+                onClick={onChangePassword}
+                disabled={busy}
+                className={`w-full ${accentButtonClass(true)} mt-3`}
+              >
+                {busy ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Password Change Panel */}
-      {showPwd && (
-        <div className={`mt-6 ${panelClass}`}>
-          <h3 className={`text-xl font-bold mb-4 ${accentColorClass}`}>Update Password</h3>
-          <div className="grid md:grid-cols-3 gap-4">
-            <input className={`px-3 py-2 rounded-lg border ${cardBorderClass} ${COLOR_MAP.TEXT_MAIN} ${COLOR_MAP.SCI_PANEL} focus:ring-2 focus:ring-[${ACCENT_PRIMARY_HEX}] dark:focus:ring-[${ACCENT_SECONDARY_HEX}]`} type="password" placeholder="Current password" value={pwdOld} onChange={e=>setPwdOld(e.target.value)} />
-            <input className={`px-3 py-2 rounded-lg border ${cardBorderClass} ${COLOR_MAP.TEXT_MAIN} ${COLOR_MAP.SCI_PANEL} focus:ring-2 focus:ring-[${ACCENT_PRIMARY_HEX}] dark:focus:ring-[${ACCENT_SECONDARY_HEX}]`} type="password" placeholder="New password" value={pwdNew} onChange={e=>setPwdNew(e.target.value)} />
-            <input className={`px-3 py-2 rounded-lg border ${cardBorderClass} ${COLOR_MAP.TEXT_MAIN} ${COLOR_MAP.SCI_PANEL} focus:ring-2 focus:ring-[${ACCENT_PRIMARY_HEX}] dark:focus:ring-[${ACCENT_SECONDARY_HEX}]`} type="password" placeholder="Confirm new password" value={pwdNew2} onChange={e=>setPwdNew2(e.target.value)} />
-          </div>
-          <div className="mt-4 flex gap-3">
-            <button className={accentButtonClass(true)} onClick={onChangePassword} disabled={busy}>Save Password</button>
-            <button className={accentButtonClass(false)} onClick={()=> setShowPwd(false)} disabled={busy}>Cancel</button>
-          </div>
-        </div>
-      )}
+      {/* Footer */}
+      <Footer />
     </div>
-  )
+  );
 }

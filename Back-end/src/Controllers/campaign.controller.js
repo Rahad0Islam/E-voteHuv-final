@@ -331,6 +331,107 @@ const deleteComment = AsynHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, { deleted: true }, "Comment deleted successfully"));
 });
 
+const editPost = AsynHandler(async (req, res) => {
+  console.log("edit post working ");
+  const { postID } = req.body
+  const eventID = req.body?.eventID || req.query?.eventID
+  const content = req.body?.content
+  let removeMediaIds = req.body?.removeMediaIds
+
+  if(!postID || !eventID) throw new ApiError(400,'postID and eventID are required')
+  const UserID = req.user?._id
+  const Role = req.user?.Role
+
+  const Event = await VoteEvent.findById(eventID)
+  if(!Event) throw new ApiError(404,'Vote event not found')
+
+  const PostDoc = await post.findById(postID)
+  if(!PostDoc) throw new ApiError(404,'Post not found')
+
+  if(String(PostDoc.eventID) !== String(eventID)) throw new ApiError(400,'Post does not belong to provided event')
+
+  if(String(PostDoc.owner) !== String(UserID) && Role !== 'admin') throw new ApiError(403,'Not authorized to edit this post')
+
+  // Update text content
+  if(typeof content === 'string') PostDoc.content = content
+
+  // Normalize removeMediaIds (can be array or a single string from FormData)
+  if(typeof removeMediaIds === 'string') removeMediaIds = [ removeMediaIds ]
+  if(Array.isArray(removeMediaIds) && removeMediaIds.length){
+    const ids = new Set(removeMediaIds.map(String))
+    const keepPic = []
+    for(const p of (PostDoc.picture||[])){
+      if(ids.has(String(p.publicId))){
+        try{ if(p.publicId) await FileDelete(p.publicId) }catch(e){ console.error('Cloud delete picture failed', e?.message||e) }
+      } else keepPic.push(p)
+    }
+    PostDoc.picture = keepPic
+    const keepVid = []
+    for(const v of (PostDoc.video||[])){
+      if(ids.has(String(v.publicId))){
+        try{ if(v.publicId) await FileDelete(v.publicId) }catch(e){ console.error('Cloud delete video failed', e?.message||e) }
+      } else keepVid.push(v)
+    }
+    PostDoc.video = keepVid
+  }
+
+  // Append new uploads (if any)
+  const newPics = []
+  const pictureFiles = Array.isArray(req.files?.picture) ? req.files.picture : []
+  for(const pic of pictureFiles){
+    try{ const up = await FileUpload(pic.path); if(up){ newPics.push({ url: up.url, publicId: up.public_id }) } }
+    catch(e){ console.error('Edit upload picture failed', e?.message||e) }
+  }
+  const newVids = []
+  const videoFiles = Array.isArray(req.files?.video) ? req.files.video : []
+  for(const vid of videoFiles){
+    try{ const up = await FileUpload(vid.path); if(up){ newVids.push({ url: up.url, publicId: up.public_id }) } }
+    catch(e){ console.error('Edit upload video failed', e?.message||e) }
+  }
+  if(newPics.length) PostDoc.picture = [ ...(PostDoc.picture||[]), ...newPics ]
+  if(newVids.length) PostDoc.video = [ ...(PostDoc.video||[]), ...newVids ]
+
+  await PostDoc.save({ validateBeforeSave:false })
+  return res.status(200).json(new ApiResponse(200, PostDoc, 'Post updated'))
+})
+
+const editComment = AsynHandler(async (req, res) => {
+  const { commentID, eventID, comment } = req.body
+  if(!commentID || !eventID) throw new ApiError(400,'commentID and eventID are required')
+  const UserID = req.user?._id
+  const Role = req.user?.Role
+  const cmt = await Comment.findById(commentID)
+  if(!cmt) throw new ApiError(404,'Comment not found')
+  if(String(cmt.owner) !== String(UserID) && Role !== 'admin') throw new ApiError(403,'Not authorized')
+  cmt.comment = comment || ''
+  await cmt.save({ validateBeforeSave:false })
+  return res.status(200).json(new ApiResponse(200, cmt, 'Comment updated'))
+})
+
+const reactComment = AsynHandler(async (req, res) => {
+  const { commentID, eventID, like, dislike } = req.body
+  if(!commentID || !eventID) throw new ApiError(400,'commentID and eventID are required')
+  const UserID = req.user?._id
+  const Role = req.user?.Role
+  if(!UserID) throw new ApiError(401,'User not found')
+  const Event = await VoteEvent.findById(eventID)
+  if(!Event) throw new ApiError(404,'Vote event not found')
+  const cmt = await Comment.findById(commentID)
+  if(!cmt) throw new ApiError(404,'Comment not found')
+  // Toggle reactions
+  const idxL = cmt.likes.findIndex(u => String(u)===String(UserID))
+  const idxD = cmt.dislikes.findIndex(u => String(u)===String(UserID))
+  if(like){
+    if(idxL===-1) cmt.likes.push(UserID)
+    if(idxD!==-1) cmt.dislikes.splice(idxD,1)
+  } else if(dislike){
+    if(idxD===-1) cmt.dislikes.push(UserID)
+    if(idxL!==-1) cmt.likes.splice(idxL,1)
+  }
+  await cmt.save({ validateBeforeSave:false })
+  return res.status(200).json(new ApiResponse(200, { likeCount: cmt.likes.length, dislikeCount: cmt.dislikes.length }, 'Reaction updated'))
+})
+
 export{
     posting,
     userComment,
@@ -338,5 +439,8 @@ export{
     reactEmoji,
     countLikeDislike,
     deletePost,
-    deleteComment
+    deleteComment,
+    editPost,
+    editComment,
+    reactComment
 }

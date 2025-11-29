@@ -230,3 +230,25 @@ export async function updateEventTimes({ EventID, RegEndTime, VoteStartTime, Vot
   const res = await api.patch('/api/V1/admin/updateEventTimes', { EventID, RegEndTime, VoteStartTime, VoteEndTime })
   return res.data?.data
 }
+
+export async function editCampaignPost({ eventID, postID, content, pictures = [], videos = [], removeMediaIds = [] }){
+  const fd = new FormData()
+  fd.append('eventID', eventID)
+  fd.append('postID', postID)
+  if (typeof content === 'string') fd.append('content', content)
+  removeMediaIds.forEach(id => fd.append('removeMediaIds', id))
+  pictures.forEach(f => fd.append('picture', f))
+  videos.forEach(f => fd.append('video', f))
+  const res = await api.post('/api/v1/post/editPost', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+  return res.data?.data
+}
+
+export async function editCampaignComment({ eventID, commentID, comment }){
+  const res = await api.patch('/api/v1/post/editComment', { eventID, commentID, comment })
+  return res.data?.data
+}
+
+export async function reactComment({ eventID, commentID, like=false, dislike=false }){
+  const res = await api.post('/api/v1/post/reactComment', { eventID, commentID, like, dislike })
+  return res.data?.data
+}

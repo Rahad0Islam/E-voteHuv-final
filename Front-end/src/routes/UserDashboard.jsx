@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState, useCallback } from 'react'
+import Swal from 'sweetalert2'
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { 
   listEvents, voterRegister, getNominees, giveVote, countVote, 
   getAvailableBallots, nomineeRegister, getVoteStatus, 
@@ -7,38 +8,45 @@ import {
   logout,
   // campaign api helpers
   listCampaignPosts, createCampaignPost, reactCampaignPost, addCampaignComment, deleteCampaignPost, deleteCampaignComment,
-  sendOnlineVoteCode
+  sendOnlineVoteCode,
+  // NEW: edit post helper
+  editCampaignPost
 } from '../lib/api' 
 import { getVoters } from '../lib/votersApi' 
 import { io } from 'socket.io-client'
 import { Link, useNavigate } from 'react-router-dom'
-// Inline SVG Icons for Navigation and Status
+
+// --- Inline SVG Icons ---
 const DashboardIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 3v18h18"/><path d="M18.7 8.7L12 15.4 9.3 12.7 6 16"/></svg>);
 const UpcomingIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>);
 const RunningIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>);
 const PreviousIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>);
 const ProfileIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>);
 const CalendarIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>);
-const TotalEventsIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><path d="M7 3v18M17 3v18M3 10h18M3 14h18"/></svg>);
-const VoterIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>);
-const ApprovedIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>);
-const PendingIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>);
-const RateIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/><path d="M6 15v3a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-3"/></svg>);
 
+// Social/Post Icons
+const ThreeDotsIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>);
+const ThumbUpIcon = ({ className = '', fill = "none" }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/></svg>);
+const ThumbDownIcon = ({ className = '', fill = "none" }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 14V2"/><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22h0a3.13 3.13 0 0 1-3-3.88Z"/></svg>);
+const CommentIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>);
+const SendIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="22" x2="11" y1="2" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>);
+const EditIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>);
+const TrashIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>);
+const PhotoIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>);
+const VideoIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>);
+const XIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/></svg>);
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8002'
 
 // --- Color Palette Mapping ---
-const ACCENT_PRIMARY_HEX = '#1E3A8A'; // Primary Blue (Deep/Navy)
-const ACCENT_SECONDARY_HEX = '#3B82F6'; // Link Blue (Bright/Lighter)
+const ACCENT_PRIMARY_HEX = '#1E3A8A'; // Primary Blue
+const ACCENT_SECONDARY_HEX = '#3B82F6'; // Link Blue
 
 // Backgrounds
 const BG_BODY = 'bg-[#ECEBEB] dark:bg-[#1A2129]' 
 const BG_SIDEBAR = 'bg-white dark:bg-[#111827]'
 const BG_CARD = 'bg-white dark:bg-[#111827]'
-// FIX START: Change bg-[#1a202c] to bg-white so that metric boxes in event detail view are white in light mode.
-const BG_DARK_CARD = 'bg-white dark:bg-[#111827]' // Darker background for metrics on event page
-// FIX END
+const BG_DARK_CARD = 'bg-white dark:bg-[#111827]' 
 
 // Text colors
 const TEXT_PRIMARY = 'text-gray-900 dark:text-white'
@@ -51,7 +59,30 @@ const ACCENT_VIOLET = 'text-violet-600 dark:text-violet-400'
 
 // Button/Interactive elements
 const BTN_PRIMARY = `bg-[${ACCENT_PRIMARY_HEX}] text-white hover:bg-[${ACCENT_SECONDARY_HEX}] transition duration-200 shadow-lg shadow-[${ACCENT_PRIMARY_HEX}]/40`
-const SIDEBAR_ACCENT = 'bg-[#1E3A8A] dark:bg-[#3B82F6]'
+
+// --- THEME-AWARE COLOR MAPPING FOR FOOTER ---
+// Defined color variables for easy adjustment and theme consistency
+const COLOR_MAP = {
+  // New Backgrounds: #ECEBEB (Light) and #1A2129 (Dark)
+  BG_COLOR: 'bg-[#ECEBEB] dark:bg-[#1A2129]',
+  
+  // Background for primary sections (Hero/Footer)
+  SCI_BG: 'bg-[#ECEBEB] dark:bg-[#1A2129]',
+  
+  // Background for cards and panels
+  SCI_PANEL: 'bg-white dark:bg-[#111827]',
+  
+  // Text colors for dark/light contrast
+  TEXT_MAIN: 'text-gray-900 dark:text-white',
+  TEXT_SECONDARY: 'text-gray-600 dark:text-slate-400',
+  
+  // Accent colors for buttons/highlights
+  SCI_ACCENT: `bg-[${ACCENT_PRIMARY_HEX}] dark:bg-[${ACCENT_SECONDARY_HEX}]`,
+  SCI_ACCENT_TEXT: `text-[${ACCENT_PRIMARY_HEX}] dark:text-[${ACCENT_SECONDARY_HEX}]`,
+};
+
+// --- Inline SVG Icons for Footer ---
+const MailIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.83 1.83 0 0 1-2.06 0L2 7"></path></svg>);
 
 // --- Constants for Sidebar Navigation ---
 const NAV_ITEMS = {
@@ -62,26 +93,307 @@ const NAV_ITEMS = {
   PROFILE: 'Update Profile'
 }
 
-// --- Helper Components (Refined for new Sidebar) ---
+// Helper to format "Time Ago"
+const timeAgo = (dateParam) => {
+  if (!dateParam) return null;
+  const date = typeof dateParam === 'object' ? dateParam : new Date(dateParam);
+  const today = new Date();
+  const seconds = Math.round((today - date) / 1000);
+  const minutes = Math.round(seconds / 60);
+  const hours = Math.round(minutes / 60);
+  const days = Math.round(hours / 24);
 
-// Sidebar Navigation Item
+  if (seconds < 5) return 'Just now';
+  if (seconds < 60) return `${seconds}s ago`;
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString(); 
+};
+
+// --- Footer Component ---
+const Footer = () => (
+  <footer className={`${COLOR_MAP.SCI_BG} border-t border-gray-200 dark:border-gray-700 mt-16 py-12`}>
+    <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8">
+      
+      {/* 1. Logo and Mission - FIXED TO MATCH NAVBAR/HERO STYLE */}
+      <div className="col-span-2 md:col-span-1">
+        <div className="flex items-center mb-4">
+            {/* Theme-aware E-VoteHub text using gradient */}
+            <span 
+                className={`text-xl font-bold bg-clip-text text-transparent 
+                    bg-gradient-to-r 
+                    from-gray-900 via-gray-700 to-gray-500 
+                dark:from-white dark:to-gray-500`}
+            >
+                E-VoteHub
+            </span>
+        </div>
+        <p className={`text-xs ${COLOR_MAP.TEXT_SECONDARY} max-w-xs`}>
+          Unifying secure online voting with dynamic social campaigning to drive democratic engagement.
+        </p>
+      </div>
+
+      {/* 2. Navigation Links */}
+      <div>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Platform</h4>
+        <ul className="space-y-2 text-sm">
+          <li><Link to="/" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Home</Link></li>
+          <li><Link to="/user" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Dashboard</Link></li>
+          <li><Link to="/profile" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Profile Settings</Link></li>
+        </ul>
+      </div>
+
+      {/* 3. Resources/Legal Links */}
+      <div>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Resources</h4>
+        <ul className="space-y-2 text-sm">
+          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Security Policy</a></li>
+          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Terms of Service</a></li>
+          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Privacy Statement</a></li>
+        </ul>
+      </div>
+
+      {/* 4. Contact */}
+      <div>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Contact</h4>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            rahad@gmail.com
+        </p>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            autanu2020@gmail.com
+        </p>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            shajjad@gmail.com
+        </p>
+        <p className="text-xs text-slate-500 dark:text-slate-600">
+            [Shajalal University of Science and Technology]
+        </p>
+      </div>
+
+    </div>
+
+    {/* Bottom Copyright and ID */}
+    <div className="max-w-6xl mx-auto px-4 mt-10 pt-6 border-t border-gray-300 dark:border-slate-700 text-center">
+      <p className="text-xs text-slate-500 dark:text-slate-600">
+        &copy; {new Date().getFullYear()} E-VoteHub. All rights reserved
+      </p>
+    </div>
+  </footer>
+);
+
+// Edit Post Modal Component
+const EditPostModal = ({ post, isOpen, onClose, onSave, isLoading }) => {
+  const [editContent, setEditContent] = useState(post?.content || '')
+  const [editPictures, setEditPictures] = useState([])
+  const [editVideos, setEditVideos] = useState([])
+  const [existingPictures, setExistingPictures] = useState(post?.picture || [])
+  const [existingVideos, setExistingVideos] = useState(post?.video || [])
+
+  useEffect(() => {
+    if (post) {
+      setEditContent(post.content || '')
+      setExistingPictures(post.picture || [])
+      setExistingVideos(post.video || [])
+      setEditPictures([])
+      setEditVideos([])
+    }
+  }, [post, isOpen])
+
+  const handleRemoveExistingPicture = (publicId) => {
+    setExistingPictures(prev => prev.filter(p => p.publicId !== publicId))
+  }
+
+  const handleRemoveExistingVideo = (publicId) => {
+    setExistingVideos(prev => prev.filter(v => v.publicId !== publicId))
+  }
+
+  const handleRemoveNewPicture = (index) => {
+    setEditPictures(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleRemoveNewVideo = (index) => {
+    setEditVideos(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSave = () => {
+    if (!editContent.trim() && existingPictures.length === 0 && existingVideos.length === 0 && editPictures.length === 0 && editVideos.length === 0) {
+      Swal.fire({title: 'Invalid Post', text: 'Your post cannot be empty', icon: 'error', confirmButtonText: 'OK', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+      return
+    }
+    onSave({
+      content: editContent.trim(),
+      existingPictures,
+      existingVideos,
+      newPictures: editPictures,
+      newVideos: editVideos
+    })
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black/50 dark:bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-[#111827] rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        
+        {/* Modal Header */}
+        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-[#111827]">
+          <h3 className={`text-2xl font-bold ${TEXT_PRIMARY}`}>Edit Post</h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition">
+            <XIcon className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Modal Content */}
+        <div className="p-6 space-y-6">
+          
+          {/* Text Content */}
+          <div>
+            <label className={`block text-sm font-semibold mb-2 ${TEXT_PRIMARY}`}>Post Content</label>
+            <textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder="What's on your mind?"
+              className={`w-full p-4 bg-gray-100 dark:bg-[#3A3B3C] rounded-lg min-h-[120px] ${TEXT_PRIMARY} placeholder-gray-500 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-blue-500 outline-none resize-none`}
+              disabled={isLoading}
+            />
+          </div>
+
+          {/* Existing Media */}
+          {(existingPictures.length > 0 || existingVideos.length > 0) && (
+            <div>
+              <label className={`block text-sm font-semibold mb-3 ${TEXT_PRIMARY}`}>Current Media</label>
+              <div className="grid grid-cols-2 gap-3">
+                {existingPictures.map((pic) => (
+                  <div key={pic.publicId} className="relative group">
+                    <img src={pic.url} alt="existing" className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveExistingPicture(pic.publicId)}
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                      disabled={isLoading}
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-2 py-1 rounded">Photo</span>
+                  </div>
+                ))}
+                {existingVideos.map((vid) => (
+                  <div key={vid.publicId} className="relative group">
+                    <video src={vid.url} className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveExistingVideo(vid.publicId)}
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                      disabled={isLoading}
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-2 py-1 rounded">Video</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* New Media */}
+          {(editPictures.length > 0 || editVideos.length > 0) && (
+            <div>
+              <label className={`block text-sm font-semibold mb-3 ${TEXT_PRIMARY}`}>New Media to Add</label>
+              <div className="grid grid-cols-2 gap-3">
+                {editPictures.map((pic, idx) => (
+                  <div key={idx} className="relative group">
+                    <img src={URL.createObjectURL(pic)} alt="new" className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveNewPicture(idx)}
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                      disabled={isLoading}
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-2 py-1 rounded">+Photo</span>
+                  </div>
+                ))}
+                {editVideos.map((vid, idx) => (
+                  <div key={idx} className="relative group">
+                    <video src={URL.createObjectURL(vid)} className="w-full h-32 object-cover rounded-lg border border-gray-200 dark:border-gray-700" />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveNewVideo(idx)}
+                      className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                      disabled={isLoading}
+                    >
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-xs px-2 py-1 rounded">+Video</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Add Media Section */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+            <label className={`block text-sm font-semibold mb-3 ${TEXT_PRIMARY}`}>Add More Media</label>
+            <div className="flex gap-3">
+              <label className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-[#3A3B3C] hover:bg-gray-200 dark:hover:bg-[#4A4B4C] cursor-pointer transition text-gray-700 dark:text-gray-200 text-sm font-medium">
+                <PhotoIcon className="w-5 h-5 text-green-500" />
+                <span>Add Photos</span>
+                <input type="file" multiple accept="image/*" onChange={(e) => setEditPictures([...editPictures, ...Array.from(e.target.files || [])])} className="hidden" disabled={isLoading} />
+              </label>
+              <label className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-100 dark:bg-[#3A3B3C] hover:bg-gray-200 dark:hover:bg-[#4A4B4C] cursor-pointer transition text-gray-700 dark:text-gray-200 text-sm font-medium">
+                <VideoIcon className="w-5 h-5 text-red-500" />
+                <span>Add Videos</span>
+                <input type="file" multiple accept="video/*" onChange={(e) => setEditVideos([...editVideos, ...Array.from(e.target.files || [])])} className="hidden" disabled={isLoading} />
+              </label>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Footer */}
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+          <button
+            onClick={onClose}
+            disabled={isLoading}
+            className="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#3A3B3C] transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={isLoading}
+            className={`px-6 py-2 rounded-lg font-semibold transition ${
+              isLoading
+                ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
+          >
+            {isLoading ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Helper Components ---
 const NavItem = ({ icon: Icon, label, isActive, onClick }) => {
   const activeClass = isActive 
     ? `bg-[#1E3A8A] text-white dark:bg-[#3B82F6] dark:text-white shadow-xl shadow-[#1E3A8A]/40 dark:shadow-[#3B82F6]/40 font-bold`
     : `text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium`;
   
   return (
-    <button
-      onClick={onClick}
-      className={`flex items-center w-full px-4 py-3 rounded-xl transition-all duration-200 ${activeClass}`}
-    >
+    <button onClick={onClick} className={`flex items-center w-full px-4 py-3 rounded-xl transition-all duration-200 ${activeClass}`}>
       <Icon className={`w-5 h-5 mr-3 ${!isActive && ACCENT_PRIMARY_TEXT}`} />
       <span className="text-sm">{label}</span>
     </button>
   );
 };
 
-// Helper component for styled metric boxes 
 const MetricBox = ({ title, value, accentClass = ACCENT_PRIMARY_TEXT, icon: Icon, iconBgClass, isDashboard = true }) => (
   <div className={`p-6 rounded-xl ${isDashboard ? BG_CARD : BG_DARK_CARD} shadow-md transition duration-300 border border-gray-200 dark:border-gray-700`}>
     {isDashboard && (
@@ -99,19 +411,21 @@ const MetricBox = ({ title, value, accentClass = ACCENT_PRIMARY_TEXT, icon: Icon
   </div>
 );
 
-
-// Event List Item (Logic is simplified from original for clarity, relying on external state updates)
 const EventListItem = ({ event, onClick }) => {
   let statusClass = ACCENT_PRIMARY_TEXT; 
   let statusDetail = 'Registration Open';
   let statusSymbol = '✍️'; 
 
-  // Derive status based on event phase
-  if (new Date(event.VoteEndTime).getTime() <= new Date().getTime()) {
+  const now = new Date().getTime();
+  const start = new Date(event.VoteStartTime).getTime();
+  const end = new Date(event.VoteEndTime).getTime();
+  const regEnd = new Date(event.RegEndTime).getTime();
+
+  if (end <= now) {
     event.status = 'finished';
-  } else if (new Date(event.VoteStartTime).getTime() <= new Date().getTime()) {
+  } else if (start <= now) {
     event.status = 'voting';
-  } else if (new Date(event.RegEndTime).getTime() <= new Date().getTime()) {
+  } else if (regEnd <= now) {
     event.status = 'waiting';
   } else {
     event.status = 'registration';
@@ -139,6 +453,7 @@ const EventListItem = ({ event, onClick }) => {
     const s = String(Math.floor((t%60000)/1000)).padStart(2,'0');
     return `${h}:${m}:${s}`;
   }
+  
   return (
     <button
       onClick={onClick}
@@ -184,14 +499,14 @@ export default function UserDashboard(){
   const [voteCode, setVoteCode] = useState('')
   const [sendingCode, setSendingCode] = useState(false)
   
-  // Event Metrics state (used for event detail view)
+  // Event Metrics state
   const [voterCount, setVoterCount] = useState(0)
   const [approvedCount, setApprovedCount] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
-  const [participationRate, setParticipationRate] = useState('0.0%') // Store as formatted string
+  const [participationRate, setParticipationRate] = useState('0.0%')
   const [phaseRefreshed, setPhaseRefreshed] = useState({ reg:false, start:false, end:false })
 
-  // Campaign feature states (added)
+  // Campaign feature states
   const [campaignPosts, setCampaignPosts] = useState([])
   const [campaignLoading, setCampaignLoading] = useState(false)
   const [campaignError, setCampaignError] = useState(null)
@@ -201,6 +516,18 @@ export default function UserDashboard(){
   const [postingLoading, setPostingLoading] = useState(false)
   const [commentInputs, setCommentInputs] = useState({})
   const [eventRenderNonce, setEventRenderNonce] = useState(0)
+  
+  // NEW: State for tracking open menu in posts & expanded comments
+  const [activeMenuPostId, setActiveMenuPostId] = useState(null)
+  const [expandedComments, setExpandedComments] = useState({})
+
+  // NEW: State for edit modal
+  const [editingPostId, setEditingPostId] = useState(null)
+  const [editingPost, setEditingPost] = useState(null)
+  const [editLoading, setEditLoading] = useState(false)
+
+  // Focus ref for reply functionality
+  const commentInputRefs = useRef({})
 
   const user = useMemo(() => { 
     try{ return JSON.parse(localStorage.getItem('user')||'null') } catch{ return null } 
@@ -218,7 +545,6 @@ export default function UserDashboard(){
       const voteStartMs = new Date(event.VoteStartTime).getTime();
       const voteEndMs = new Date(event.VoteEndTime).getTime();
       
-      // Categorize based on voting time, which is the most critical phase
       if (nowMs >= voteStartMs && nowMs < voteEndMs) {
           categories.running.push(event);
       } else if (nowMs < voteStartMs) {
@@ -239,7 +565,6 @@ export default function UserDashboard(){
     }
   }, [activeView, categorizedEvents]);
 
-  // Map nominee id to display info (name, ballot, profile)
   const nomineeLookup = useMemo(() => {
     const m = {};
     nominees.forEach(n => {
@@ -258,7 +583,6 @@ export default function UserDashboard(){
   useEffect(()=>{
     if(!activeEvent) return
     
-    // Reset state on active event change
     setVoteSelection({})
     setRankOrder([])
     setResults(null)
@@ -268,9 +592,9 @@ export default function UserDashboard(){
     setApprovedCount(0)
     setPendingCount(0)
     setParticipationRate('0.0%')
+    setExpandedComments({}) // Reset expanded comments on event switch
 
 
-    // Determine event status
     let status = 'registration';
     const nowMs = Date.now();
     if (new Date(activeEvent.VoteEndTime).getTime() <= nowMs) {
@@ -281,7 +605,6 @@ export default function UserDashboard(){
         status = 'waiting';
     }
     
-    // Fetch phase-specific data
     if(status === 'registration'){
       getAvailableBallots(activeEvent._id).then(setBallots)
       getVoterRegStatus(activeEvent._id).then(s=> setIsVoterRegistered(!!s.registered))
@@ -299,7 +622,6 @@ export default function UserDashboard(){
       getVoteStatus(activeEvent._id).then(s=> setHasVoted(s.voted)).catch(()=>setHasVoted(false))
     } else { setHasVoted(false) }
 
-    // Fetch Nominee and Voter Metrics (for event detail page)
     const fetchMetrics = async () => {
       try{
         const approved = await getNominees(activeEvent._id)
@@ -319,13 +641,11 @@ export default function UserDashboard(){
         const d = part.data?.data
         if(d) setParticipationRate(`${d.VoterPerticapteRate || '0.0'}%`)
       }catch(e){
-        console.error("Failed to fetch participation rate:", e)
         setParticipationRate('0.0%')
       }
     }
     fetchMetrics()
     
-    // Setup Socket IO for real-time updates (only during voting)
     let s;
     if(status === 'voting'){
       s = io(API_BASE, { withCredentials: true })
@@ -339,9 +659,9 @@ export default function UserDashboard(){
     return ()=>{ 
       if(s){ s.emit('leaveEvent', activeEvent._id); s.disconnect() }
     }
-  },[activeEvent]) // Re-run only when event changes, not every second
+  },[activeEvent]) 
 
-  // --- Time and Auto-Refresh Logic (Unchanged) ---
+  // --- Time and Auto-Refresh Logic ---
   useEffect(()=>{
     const id = setInterval(()=> setNow(new Date()), 1000)
     return ()=> clearInterval(id)
@@ -386,47 +706,40 @@ export default function UserDashboard(){
     return `${h}:${m}:${s}`
   }
 
-  // --- Handlers (Optimized to prevent refreshing) ---
+  // --- Handlers ---
   const onRegisterVoter = useCallback(async (e)=>{
-    if(e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
+    if(e) { e.preventDefault(); e.stopPropagation() }
     if(!activeEvent) return
     try{ 
       await voterRegister(activeEvent._id); 
       setIsVoterRegistered(true); 
-      alert('Registered for voting') 
+      Swal.fire({title: 'Registration Successful!', text: 'You have been registered as a voter', icon: 'success', confirmButtonText: 'Great!', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'}) 
     }catch(err){ 
-      alert(err?.response?.data?.message || 'Failed to register as voter') 
+      Swal.fire({title: 'Registration Failed', text: err?.response?.data?.message || 'Failed to register as voter', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'}) 
     }
   }, [activeEvent])
 
   const onNominate = useCallback(async (e)=>{
-    if(e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
+    if(e) { e.preventDefault(); e.stopPropagation() }
     if(!activeEvent) return
-    if(!selectedBallot){ alert('Select a ballot image'); return }
+    if(!selectedBallot){ Swal.fire({title: 'Missing Ballot', text: 'Please select a ballot image to continue', icon: 'warning', confirmButtonText: 'OK', background: 'rgba(239, 193, 68, 0.15)', color: 'var(--text-primary)'}); return }
     try{
       await nomineeRegister({ EventID: activeEvent._id, SelectedBalot:{ url: selectedBallot.url, publicId: selectedBallot.publicId }, Description: desc })
       setIsNomineeRegistered(true)
-      alert('Nominee registration submitted (awaiting admin approval)')
+      Swal.fire({title: 'Submitted Successfully!', text: 'Your nominee registration has been submitted and is awaiting admin approval', icon: 'success', confirmButtonText: 'Perfect!', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
     }catch(err){
-      alert(err?.response?.data?.message || 'Failed to register as nominee')
+      Swal.fire({title: 'Registration Failed', text: err?.response?.data?.message || 'Failed to register as nominee', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
     }
   }, [activeEvent, selectedBallot, desc])
 
   const onVote = useCallback(async (e)=>{
     if(e) { e.preventDefault(); e.stopPropagation() }
     if(!activeEvent || hasVoted || isSubmittingVote) return
-    // Require code for protected modes
     const requiresCode = activeEvent?.votingMode === 'online' || activeEvent?.votingMode === 'onCampus'
     if(requiresCode){
       const normalized = String(voteCode||'').trim()
       if(normalized.length !== 6 || !/^[0-9]{6}$/.test(normalized)){
-        alert('Enter a valid 6-digit code to submit your vote')
+        Swal.fire({title: 'Invalid Code', text: 'Please enter a valid 6-digit code to submit your vote', icon: 'error', confirmButtonText: 'OK', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
         return
       }
     }
@@ -444,29 +757,22 @@ export default function UserDashboard(){
       }
       await giveVote({ EventID: activeEvent._id, ElectionType, SelectedNominee, code: voteCode })
       setHasVoted(true)
-      alert('Voted successfully')
+      Swal.fire({title: 'Vote Submitted!', text: 'Your vote has been successfully submitted and recorded', icon: 'success', confirmButtonText: 'Thank You!', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
     }catch(err){
-      alert(err?.response?.data?.message || 'Vote failed')
+      Swal.fire({title: 'Vote Failed', text: err?.response?.data?.message || 'Failed to submit your vote', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
     } finally {
       setIsSubmittingVote(false)
     }
   }, [activeEvent, voteSelection, rankOrder, hasVoted, isSubmittingVote, voteCode])
 
-  // Optimized ballot selection handler
   const handleBallotSelection = useCallback((ballot, e) => {
-    if(e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
+    if(e) { e.preventDefault(); e.stopPropagation() }
     if(isNomineeRegistered) return
     setSelectedBallot(ballot)
   }, [isNomineeRegistered])
 
-  // Optimized vote selection handlers
   const handleVoteChange = useCallback((nomineeId, electionType, e) => {
-    if(e) {
-      e.stopPropagation()
-    }
+    if(e) { e.stopPropagation() }
     if(hasVoted) return
     
     if(electionType === 'Rank'){
@@ -482,45 +788,28 @@ export default function UserDashboard(){
     }
   }, [hasVoted])
 
-  // Optimized description change handler
   const handleDescriptionChange = useCallback((e) => {
     if(isNomineeRegistered) return
     setDesc(e.target.value)
   }, [isNomineeRegistered])
 
-  // Optimized navigation handlers
   const handleNavigation = useCallback((view, e) => {
-    if(e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
+    if(e) { e.preventDefault(); e.stopPropagation() }
     setActiveView(view)
     setActiveEvent(null)
   }, [])
 
   const handleEventSelection = useCallback((event, e) => {
-    if(e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
+    if(e) { e.preventDefault(); e.stopPropagation() }
     setActiveEvent(event)
   }, [])
 
   const onLogout = useCallback(async (e)=>{
-    if(e) {
-      e.preventDefault()
-      e.stopPropagation()
-    }
-    try {
-      await logout() 
-      navigate('/login')
-    } catch(err) {
-      console.error('Logout error:', err)
-      navigate('/login') // Navigate anyway in case of error
-    }
+    if(e) { e.preventDefault(); e.stopPropagation() }
+    try { await logout(); navigate('/login') } 
+    catch(err) { navigate('/login') }
   }, [navigate])
 
-  // Determine vote button disabled state (include code requirement for protected modes)
   const selectionInvalid = activeEvent?.ElectionType === 'Rank' 
     ? rankOrder.length === 0 
     : Object.keys(voteSelection).length === 0
@@ -528,7 +817,9 @@ export default function UserDashboard(){
   const codeInvalid = requiresCode ? !(String(voteCode||'').trim().length === 6 && /^[0-9]{6}$/.test(String(voteCode||'').trim())) : false
   const isVoteDisabled = selectionInvalid || codeInvalid
 
-  // --- Campaign Posts: fetch when activeEvent changes & define missing handlers (fix blank page) ---
+  // --- Campaign Posts Logic ---
+  
+  // Use event ID as dependency to avoid object reference loop
   useEffect(()=>{
     let cancelled = false
     if(!activeEvent){
@@ -543,9 +834,8 @@ export default function UserDashboard(){
       .catch(err=>{ if(!cancelled){ console.error('Campaign posts load failed:', err); setCampaignError(err?.response?.data?.message || 'Failed to load posts') }})
       .finally(()=>{ if(!cancelled){ setCampaignLoading(false); setEventRenderNonce(n=>n+1) }})
     return ()=>{ cancelled = true }
-  }, [activeEvent, listCampaignPosts])
+  }, [activeEvent?._id]) // Changed dependency to ID only
 
-  // Handlers for media selection
   const onPicturesChange = useCallback((e)=>{
     const files = Array.from(e.target.files||[])
     setNewPostPictures(files)
@@ -555,7 +845,6 @@ export default function UserDashboard(){
     setNewPostVideos(files)
   },[])
 
-  // Create post
   const handleCreateCampaignPost = useCallback(async (e)=>{
     if(e){ e.preventDefault(); e.stopPropagation() }
     if(!activeEvent) return
@@ -566,7 +855,6 @@ export default function UserDashboard(){
     try{
       setPostingLoading(true)
       setCampaignError(null)
-      // Use API helper signature (object) instead of sending FormData directly
       await createCampaignPost({ 
         eventID: activeEvent._id, 
         content: newPostContent.trim(), 
@@ -579,28 +867,21 @@ export default function UserDashboard(){
       const refreshed = await listCampaignPosts(activeEvent._id)
       setCampaignPosts(Array.isArray(refreshed)? refreshed : (refreshed?.posts||[]))
     }catch(err){
-      console.error('Create post failed:', err)
       setCampaignError(err?.response?.data?.message || 'Failed to create post')
     }finally{
       setPostingLoading(false)
     }
   }, [activeEvent, newPostContent, newPostPictures, newPostVideos])
 
-  // React (like/dislike)
   const handleReact = useCallback(async (postId, action)=>{
     if(!activeEvent) return
     try{
       await reactCampaignPost({ eventID: activeEvent._id, postID: postId, type: action })
-      // Refetch post list to ensure counts are accurate (simpler than manual mutation)
       const refreshed = await listCampaignPosts(activeEvent._id)
       setCampaignPosts(Array.isArray(refreshed)? refreshed : (refreshed?.posts||[]))
-    }catch(err){
-      console.error('Reaction failed:', err)
-      setCampaignError(err?.response?.data?.message || 'Reaction failed')
-    }
+    }catch(err){ console.error('Reaction failed:', err) }
   }, [activeEvent])
 
-  // Add comment
   const handleAddComment = useCallback(async (postId)=>{
     if(!activeEvent) return
     const text = (commentInputs[postId]||'').trim()
@@ -608,49 +889,124 @@ export default function UserDashboard(){
     try{
       await addCampaignComment({ eventID: activeEvent._id, postID: postId, comment: text })
       setCommentInputs(c=> ({ ...c, [postId]: '' }))
+      setExpandedComments(prev => ({ ...prev, [postId]: true })) // Open comments after commenting
       const refreshed = await listCampaignPosts(activeEvent._id)
       setCampaignPosts(Array.isArray(refreshed)? refreshed : (refreshed?.posts||[]))
-    }catch(err){
-      console.error('Add comment failed:', err)
-      setCampaignError(err?.response?.data?.message || 'Failed to add comment')
-    }
+    }catch(err){ console.error('Add comment failed:', err) }
   }, [activeEvent, commentInputs])
 
-  // Delete post
+  // NEW: Toggle Menu Handler
+  const toggleMenu = useCallback((postId) => {
+    setActiveMenuPostId(prev => prev === postId ? null : postId);
+  }, []);
+
+  // NEW: Edit Handler
+  const handleEditPost = useCallback((postId) => {
+    const post = campaignPosts.find(p => p._id === postId)
+    if (post) {
+      setEditingPost(post)
+      setEditingPostId(postId)
+      setActiveMenuPostId(null)
+    }
+  }, [campaignPosts]);
+
+  // NEW: Save Edit Handler
+  const handleSaveEditPost = useCallback(async (editData) => {
+    if (!activeEvent || !editingPostId) return
+    try {
+      setEditLoading(true)
+      const formData = new FormData()
+      formData.append('eventID', activeEvent._id)
+      formData.append('postID', editingPostId)
+      if (typeof editData.content === 'string') formData.append('content', editData.content)
+      // compute media to remove by publicId
+      const removePicIds = (editingPost.picture||[]).filter(p => !(editData.existingPictures||[]).find(ep => ep.publicId === p.publicId)).map(p => p.publicId)
+      const removeVidIds = (editingPost.video||[]).filter(v => !(editData.existingVideos||[]).find(ev => ev.publicId === v.publicId)).map(v => v.publicId)
+      // backend expects removeMediaIds repeated keys
+      ;[...removePicIds, ...removeVidIds].forEach(id => formData.append('removeMediaIds', id))
+      // new uploads must use keys 'picture' and 'video'
+      ;(editData.newPictures||[]).forEach(pic => formData.append('picture', pic))
+      ;(editData.newVideos||[]).forEach(vid => formData.append('video', vid))
+
+      // Use API helper that posts FormData to /api/v1/post/editPost
+      await editCampaignPost({ eventID: activeEvent._id, postID: editingPostId, content: editData.content, pictures: editData.newPictures||[], videos: editData.newVideos||[], removeMediaIds: [...removePicIds, ...removeVidIds] })
+      const refreshed = await listCampaignPosts(activeEvent._id)
+      setCampaignPosts(Array.isArray(refreshed)? refreshed : (refreshed?.posts||[]))
+      setEditingPostId(null)
+      setEditingPost(null)
+      Swal.fire({title: 'Success!', text: 'Your post has been updated successfully', icon: 'success', confirmButtonText: 'Done', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
+    } catch (err) {
+      setCampaignError(err?.response?.data?.message || 'Failed to update post')
+      Swal.fire({title: 'Update Failed', text: err?.response?.data?.message || 'Failed to update your post', icon: 'error', confirmButtonText: 'Retry', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+    } finally {
+      setEditLoading(false)
+    }
+  }, [activeEvent, editingPostId, editingPost])
+
   const handleDeletePost = useCallback(async (postId)=>{
     if(!activeEvent) return
-    if(!confirm('Delete this post?')) return
+    const result = await Swal.fire({title: 'Delete Post?', text: 'This action cannot be undone. Your post will be permanently deleted.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, Delete', cancelButtonText: 'Cancel', confirmButtonColor: '#DC2626', cancelButtonColor: '#6B7280', background: 'rgba(239, 193, 68, 0.15)', color: 'var(--text-primary)'}); if (!result.isConfirmed) return
     try{
       await deleteCampaignPost({ eventID: activeEvent._id, postID: postId })
       setCampaignPosts(p=> p.filter(x=> x._id!==postId))
     }catch(err){
-      console.error('Delete post failed:', err)
       setCampaignError(err?.response?.data?.message || 'Failed to delete post')
     }
+    setActiveMenuPostId(null);
   }, [activeEvent])
 
-  // Delete comment
   const handleDeleteComment = useCallback(async (postId, commentId)=>{
     if(!activeEvent) return
     try{
       await deleteCampaignComment({ eventID: activeEvent._id, commentID: commentId })
       setCampaignPosts(p=> p.map(post=> post._id===postId ? { ...post, comments: (post.comments||[]).filter(c=> c._id!==commentId) } : post))
-    }catch(err){
-      console.error('Delete comment failed:', err)
-      setCampaignError(err?.response?.data?.message || 'Failed to delete comment')
-    }
+    }catch(err){ console.error('Delete comment failed:', err) }
   }, [activeEvent])
 
-  // Define requestVoteCode so voting view can call it
+  // NEW: Toggle Comments Visibility
+  const toggleComments = useCallback((postId) => {
+    setExpandedComments(prev => ({ ...prev, [postId]: !prev[postId] }));
+  }, []);
+
+  // NEW: Reply to Comment (Fills input)
+  const handleReplyComment = useCallback((postId, authorName) => {
+    setCommentInputs(prev => ({ ...prev, [postId]: `@${authorName} ` }));
+    if(commentInputRefs.current[postId]) {
+      commentInputRefs.current[postId].focus();
+    }
+    setExpandedComments(prev => ({ ...prev, [postId]: true })); // Ensure expanded
+  }, []);
+
+  // NEW: React to Comment (Optimistic UI only as API is missing)
+  const handleReactComment = useCallback((postId, commentId) => {
+    setCampaignPosts(prevPosts => prevPosts.map(post => {
+        if(post._id !== postId) return post;
+        return {
+            ...post,
+            comments: post.comments.map(c => {
+                if(c._id !== commentId) return c;
+                // Optimistic toggle of like
+                const hasLiked = c.likedByMe; // Assumed local state for now
+                return { 
+                    ...c, 
+                    likedByMe: !hasLiked,
+                    likesCount: (c.likesCount || 0) + (hasLiked ? -1 : 1)
+                };
+            })
+        };
+    }));
+  }, []);
+
+
   const requestVoteCode = useCallback(async () => {
     try{
       if (!activeEvent) return
       if (activeEvent?.votingMode !== 'online') return
       setSendingCode(true)
       await sendOnlineVoteCode(activeEvent._id)
-      alert('Verification code sent to your email')
+      Swal.fire({title: 'Code Sent!', text: 'A verification code has been sent to your email address', icon: 'success', confirmButtonText: 'OK', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
     }catch(err){
-      alert(err?.response?.data?.message || 'Failed to send code')
+      Swal.fire({title: 'Failed to Send', text: err?.response?.data?.message || 'Failed to send verification code', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
     }finally{
       setSendingCode(false)
     }
@@ -661,14 +1017,10 @@ export default function UserDashboard(){
 
   const renderDashboardView = () => (
     <>
-      {/* 1. Dashboard Title (User Request) */}
       <h2 className={`text-5xl font-extrabold ${TEXT_PRIMARY} mb-10 flex items-center`}>
         <span className={`mr-4 text-6xl ${ACCENT_PRIMARY_TEXT}`}>🗳️</span>
         E-Voting Dashboard
       </h2>
-      
-
-      {/* 2. Metric Boxes (User Request: Only 3 items) */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
         <MetricBox 
           title="Running Events" 
@@ -691,7 +1043,6 @@ export default function UserDashboard(){
           iconBgClass="bg-red-600 dark:bg-red-400"
           accentClass={ACCENT_ERROR}
         />
-        {/* Total Nominees REMOVED as requested */}
       </div>
 
       <h3 className={`text-2xl font-bold ${TEXT_PRIMARY} mb-4 border-b border-gray-200 dark:border-gray-700 pb-2`}>
@@ -787,9 +1138,7 @@ export default function UserDashboard(){
   );
 
   const renderActiveContent = () => {
-    // Priority 1: Event Detail View
     if (activeEvent) {
-      // Re-determine event status on render for up-to-date UI
       let currentStatus = 'registration';
       const nowMs = now.getTime();
       if (new Date(activeEvent.VoteEndTime).getTime() <= nowMs) {
@@ -830,35 +1179,78 @@ export default function UserDashboard(){
             )}
           </div>
           
-          {/* --- Event Metrics (User Request) --- */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-              <MetricBox 
-                  title="REGISTERED VOTERS" 
-                  value={voterCount} 
-                  accentClass="text-[#3B82F6] dark:text-[#60A5FA]" 
-                  isDashboard={false}
-              />
-              <MetricBox 
-                  title="APPROVED NOMINEES" 
-                  value={approvedCount} 
-                  accentClass={ACCENT_SUCCESS} 
-                  isDashboard={false}
-              />
-              <MetricBox 
-                  title="PENDING NOMINEES" 
-                  value={pendingCount} 
-                  accentClass={ACCENT_WARNING} 
-                  isDashboard={false}
-              />
-              <MetricBox 
-                  title="PARTICIPATION RATE" 
-                  value={participationRate} 
-                  accentClass={ACCENT_VIOLET} 
-                  isDashboard={false}
-              />
+              <MetricBox title="REGISTERED VOTERS" value={voterCount} accentClass="text-[#3B82F6] dark:text-[#60A5FA]" isDashboard={false}/>
+              <MetricBox title="APPROVED NOMINEES" value={approvedCount} accentClass={ACCENT_SUCCESS} isDashboard={false}/>
+              <MetricBox title="PENDING NOMINEES" value={pendingCount} accentClass={ACCENT_WARNING} isDashboard={false}/>
+              <MetricBox title="PARTICIPATION RATE" value={participationRate} accentClass={ACCENT_VIOLET} isDashboard={false}/>
           </div>
-          {/* --- End Event Metrics --- */}
 
+          {/* ELECTION RESULTS & TALLY (Moved here as requested) */}
+          {currentStatus === 'finished' && (
+            <div className={`mb-10 p-6 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700`}>
+              <h4 className={`font-bold text-xl ${ACCENT_SUCCESS} mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center`}>
+                <span className="mr-2">🥇</span>
+                ELECTION RESULTS & TALLY
+              </h4>
+              {results ? (
+                <div className="grid md:grid-cols-2 gap-8">
+                  {results.NomineeListForSingleAndMultiVote && results.NomineeListForSingleAndMultiVote.length > 0 && (
+                    <div>
+                      <div className={`text-sm ${TEXT_SECONDARY} mb-3 font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-800 pb-1`}>Total Votes Count</div>
+                      <ul className="space-y-3">
+                        {results.NomineeListForSingleAndMultiVote?.sort((a,b)=>b.TotalVote-a.TotalVote).map((r, index) => {
+                          const id = r.NomineeID;
+                          const meta = nomineeLookup[id] || {};
+                          const displayName = r.NomineeIDName || meta.displayName || id;
+                          const imgSrc = meta.ballotUrl || meta.profileImage || 'https://placehold.co/40x40/f3f4f6/111827?text=AD';
+                          return (
+                            <li key={id} className={`flex justify-between items-center bg-white dark:bg-gray-800/50 p-3 rounded-lg border-l-4 border-current ${ACCENT_SUCCESS}`}>
+                              <div className="flex items-center gap-3">
+                                <img src={imgSrc} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-300 dark:ring-gray-600" />
+                                <Link to={`/u/${id}`} className={`font-semibold ${TEXT_PRIMARY} flex items-center hover:underline`} title="View profile">{index===0 ? '🏆 ' : ''}{displayName}</Link>
+                              </div>
+                              <span className={`text-xl font-bold ${ACCENT_SUCCESS}`}>{r.TotalVote} Votes</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                                       </div>
+                  )}
+                  
+                  {results.NomineeListForRank && results.NomineeListForRank.length > 0 && (
+                    <div>
+                      <div className={`text-sm ${TEXT_SECONDARY} mb-3 font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-800 pb-1`}>Ranked Choice Score (Lower is Better)</div>
+                      <ul className="space-y-3">
+                        {results.NomineeListForRank?.sort((a,b)=>a.TotalRank-b.TotalRank).map((r, index) => {
+                          const id = r.NomineeID;
+                          const meta = nomineeLookup[id] || {};
+                          const displayName = r.NomineeIDName || meta.displayName || id;
+                          const imgSrc = meta.ballotUrl || meta.profileImage || 'https://placehold.co/40x40/f3f4f6/111827?text=AD';
+                          return (
+                            <li key={id} className={`flex justify-between items-center bg-white dark:bg-gray-800/50 p-3 rounded-lg border-l-4 border-current ${ACCENT_VIOLET}`}>
+                              <div className="flex items-center gap-3">
+                                <img src={imgSrc} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-300 dark:ring-gray-600" />
+                                <Link to={`/u/${id}`} className={`font-semibold ${TEXT_PRIMARY} flex items-center hover:underline`} title="View profile">{index===0 ? '👑 ' : ''}{displayName}</Link>
+                              </div>
+                              <span className={`text-xl font-bold ${ACCENT_VIOLET}`}>{r.TotalRank} Score</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+
+                  {(!results.NomineeListForSingleAndMultiVote || results.NomineeListForSingleAndMultiVote.length === 0) &&
+                   (!results.NomineeListForRank || results.NomineeListForRank.length === 0) && (
+                    <div className={`text-center ${TEXT_SECONDARY} col-span-2 p-4 bg-gray-100 dark:bg-gray-900/70 rounded-lg`}>No results data found for this event.</div>
+                  )}
+                </div>
+              ) : (
+                <div className={`text-center ${TEXT_SECONDARY} p-4 bg-gray-100 dark:bg-gray-900/70 rounded-lg`}>Results are not available yet.</div>
+              )}
+            </div>
+          )}
 
           {/* Voter Registration Card */}
           <div className={`mb-6 flex flex-col md:flex-row justify-between items-center bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700`}>
@@ -878,7 +1270,6 @@ export default function UserDashboard(){
               </button>
           </div>
 
-          {/* Registration Phase */}
           {currentStatus === 'registration' && (
             <form onSubmit={(e) => { e.preventDefault(); onNominate(e); }} className={`p-6 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700`}>
               <h4 className={`font-bold text-xl ${ACCENT_PRIMARY_TEXT} mb-4 border-b border-gray-200 dark:border-gray-700 pb-2`}>
@@ -939,7 +1330,6 @@ export default function UserDashboard(){
             </form>
           )}
 
-          {/* Voting Phase */}
           {currentStatus === 'voting' && (
             <form onSubmit={(e) => { e.preventDefault(); onVote(e); }} className="space-y-6">
               <h4 className={`font-bold text-xl ${ACCENT_VIOLET} mb-4 border-b border-gray-200 dark:border-gray-700 pb-2`}>
@@ -995,7 +1385,6 @@ export default function UserDashboard(){
                 })}
               </div>
               
-              {/* Voting Code for online mode */}
               {activeEvent?.votingMode === 'online' && (
                 <div className="flex items-center gap-3">
                   <input value={voteCode} onChange={e=>setVoteCode(e.target.value)} placeholder="Enter 6-digit code" className="px-3 py-2 rounded border border-gray-300 dark:border-gray-700" />
@@ -1003,7 +1392,6 @@ export default function UserDashboard(){
                 </div>
               )}
 
-              {/* Voting Code for onCampus mode */}
               {activeEvent?.votingMode === 'onCampus' && (
                 <div className="flex items-center gap-3">
                   <input value={voteCode} onChange={e=>setVoteCode(e.target.value)} placeholder="Enter current on-campus code" className="px-3 py-2 rounded border border-gray-300 dark:border-gray-700" />
@@ -1040,200 +1428,284 @@ export default function UserDashboard(){
             </form>
           )}
 
-          {/* Finished Phase (Results) */}
-          {currentStatus === 'finished' && (
-            <div className={`p-6 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700`}>
-              <h4 className={`font-bold text-xl ${ACCENT_SUCCESS} mb-4 border-b border-gray-200 dark:border-gray-700 pb-2 flex items-center`}>
-                <span className="mr-2">🥇</span>
-                ELECTION RESULTS & TALLY
-              </h4>
-              {results ? (
-                <div className="grid md:grid-cols-2 gap-8">
-                  {/* Single/Multi Results */}
-                  {results.NomineeListForSingleAndMultiVote && results.NomineeListForSingleAndMultiVote.length > 0 && (
-                    <div>
-                      <div className={`text-sm ${TEXT_SECONDARY} mb-3 font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-800 pb-1`}>Total Votes Count</div>
-                      <ul className="space-y-3">
-                        {results.NomineeListForSingleAndMultiVote?.sort((a,b)=>b.TotalVote-a.TotalVote).map((r, index) => {
-                          const id = r.NomineeID;
-                          const meta = nomineeLookup[id] || {};
-                          const displayName = r.NomineeIDName || meta.displayName || id;
-                          const imgSrc = meta.ballotUrl || meta.profileImage || 'https://placehold.co/40x40/f3f4f6/111827?text=AD';
-                          return (
-                            <li key={id} className={`flex justify-between items-center bg-white dark:bg-gray-800/50 p-3 rounded-lg border-l-4 border-current ${ACCENT_SUCCESS}`}>
-                              <div className="flex items-center gap-3">
-                                <img src={imgSrc} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-300 dark:ring-gray-600" />
-                                <Link to={`/u/${id}`} className={`font-semibold ${TEXT_PRIMARY} flex items-center hover:underline`} title="View profile">{index===0 ? '🏆 ' : ''}{displayName}</Link>
-                              </div>
-                              <span className={`text-xl font-bold ${ACCENT_SUCCESS}`}>{r.TotalVote} Votes</span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                  
-                  {/* Rank Results */}
-                  {results.NomineeListForRank && results.NomineeListForRank.length > 0 && (
-                    <div>
-                      <div className={`text-sm ${TEXT_SECONDARY} mb-3 font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-800 pb-1`}>Ranked Choice Score (Lower is Better)</div>
-                      <ul className="space-y-3">
-                        {results.NomineeListForRank?.sort((a,b)=>a.TotalRank-b.TotalRank).map((r, index) => {
-                          const id = r.NomineeID;
-                          const meta = nomineeLookup[id] || {};
-                          const displayName = r.NomineeIDName || meta.displayName || id;
-                          const imgSrc = meta.ballotUrl || meta.profileImage || 'https://placehold.co/40x40/f3f4f6/111827?text=AD';
-                          return (
-                            <li key={id} className={`flex justify-between items-center bg-white dark:bg-gray-800/50 p-3 rounded-lg border-l-4 border-current ${ACCENT_VIOLET}`}>
-                              <div className="flex items-center gap-3">
-                                <img src={imgSrc} alt={displayName} className="w-8 h-8 rounded-full object-cover ring-2 ring-gray-300 dark:ring-gray-600" />
-                                <Link to={`/u/${id}`} className={`font-semibold ${TEXT_PRIMARY} flex items-center hover:underline`} title="View profile">{index===0 ? '👑 ' : ''}{displayName}</Link>
-                              </div>
-                              <span className={`text-xl font-bold ${ACCENT_VIOLET}`}>{r.TotalRank} Score</span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-
-                  {(!results.NomineeListForSingleAndMultiVote || results.NomineeListForSingleAndMultiVote.length === 0) &&
-                   (!results.NomineeListForRank || results.NomineeListForRank.length === 0) && (
-                    <div className={`text-center ${TEXT_SECONDARY} col-span-2 p-4 bg-gray-100 dark:bg-gray-900/70 rounded-lg`}>No results data found for this event.</div>
-                  )}
-                </div>
-              ) : (
-                <div className={`text-center ${TEXT_SECONDARY} p-4 bg-gray-100 dark:bg-gray-900/70 rounded-lg`}>Results are not available yet.</div>
-              )}
-            </div>
-          )}
-          
-          {/* Waiting Phase */}
-          {(currentStatus === 'waiting' || currentStatus === 'archived') && (
-              <div className={`p-8 rounded-xl bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-center ${TEXT_SECONDARY}`}>
-                  <h4 className={`font-bold text-xl mb-2 ${ACCENT_WARNING} flex items-center justify-center`}>
-                    <span className="mr-2">💡</span>
-                    EVENT PENDING
-                  </h4>
-                  <p className="text-sm">This event is currently in the **{currentStatus.toUpperCase()}** phase.</p>
-                  {currentStatus === 'waiting' && <p className="text-sm font-mono mt-2">Voting starts in: <span className={`${ACCENT_WARNING} font-bold`}>{timeLeft(activeEvent.VoteStartTime)}</span></p>}
-              </div>
-          )}
-
-          {/* Campaign Posting Section (moved near top for immediate visibility) */}
-          <div className="mb-10">
-            <h4 className={`text-xl font-extrabold mb-4 ${ACCENT_PRIMARY_TEXT}`}>Event Posts & Discussion</h4>
+          {/* Campaign Posting Section (FACEBOOK STYLE) - MOVED TO BOTTOM */}
+          <div className="mb-10 mt-10">
+            <h4 className={`text-xl font-extrabold mb-4 ${ACCENT_PRIMARY_TEXT}`}>Event Discussion & Updates</h4>
             {campaignError && (
               <div className="mb-4 text-xs p-3 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700">
                 {campaignError}
               </div>
             )}
-            {/* Create Post Form */}
-            <form onSubmit={handleCreateCampaignPost} className="mb-6 space-y-3 bg-gray-50 dark:bg-gray-900/40 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <textarea
-                value={newPostContent}
-                onChange={(e)=>setNewPostContent(e.target.value)}
-                placeholder="Share update, ideas or campaign message..."
-                className="w-full p-3 rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-sm"
-                rows={3}
-                disabled={postingLoading}
-              />
-              <div className="flex flex-col sm:flex-row gap-3">
-                <label className="text-xs font-semibold cursor-pointer px-3 py-2 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
-                  📷 Pictures
-                  <input type="file" multiple accept="image/*" onChange={onPicturesChange} className="hidden" />
-                </label>
-                <label className="text-xs font-semibold cursor-pointer px-3 py-2 rounded bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 border border-violet-300 dark:border-violet-700">
-                  🎥 Videos
-                  <input type="file" multiple accept="video/*" onChange={onVideosChange} className="hidden" />
-                </label>
-                <button type="submit" disabled={postingLoading} className={`px-4 py-2 text-xs rounded font-bold ${postingLoading? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed':'bg-[#1E3A8A] text-white hover:bg-[#3B82F6]'}`}>
-                  {postingLoading? 'Posting...' : 'Post'}
-                </button>
-              </div>
-              {(newPostPictures.length>0 || newPostVideos.length>0) && (
-                <div className="text-xs text-gray-600 dark:text-gray-400">
-                  {newPostPictures.length} image(s), {newPostVideos.length} video(s) selected
+            
+            {/* Create Post Input */}
+            <div className="bg-white dark:bg-[#242526] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
+                <div className="flex items-start gap-3 mb-3">
+                   <img src={user?.ProfileImage || 'https://placehold.co/40x40'} alt="me" className="w-10 h-10 rounded-full object-cover" />
+                   <textarea
+                     value={newPostContent}
+                     onChange={(e)=>setNewPostContent(e.target.value)}
+                     placeholder={`What's on your mind, ${user?.FullName?.split(' ')[0] || 'User'}?`}
+                     className="flex-1 bg-gray-100 dark:bg-[#3A3B3C] rounded-2xl px-4 py-2 min-h-[50px] outline-none border-none resize-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500"
+                     disabled={postingLoading}
+                   />
                 </div>
-              )}
-            </form>
-            {/* Posts List */}
+                <div className="flex justify-between items-center pt-2 border-t border-gray-200 dark:border-gray-700">
+                   <div className="flex gap-2">
+                       <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#3A3B3C] cursor-pointer transition text-gray-600 dark:text-gray-300 text-sm font-medium">
+                          <PhotoIcon className="w-5 h-5 text-green-500" />
+                          <span>Photo</span>
+                          <input type="file" multiple accept="image/*" onChange={onPicturesChange} className="hidden" />
+                       </label>
+                       <label className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#3A3B3C] cursor-pointer transition text-gray-600 dark:text-gray-300 text-sm font-medium">
+                          <VideoIcon className="w-5 h-5 text-red-500" />
+                          <span>Video</span>
+                          <input type="file" multiple accept="video/*" onChange={onVideosChange} className="hidden" />
+                       </label>
+                   </div>
+                   <button 
+                      onClick={handleCreateCampaignPost}
+                      disabled={postingLoading || (!newPostContent && newPostPictures.length===0 && newPostVideos.length===0)}
+                      className={`px-6 py-2 rounded-lg font-semibold text-sm transition ${
+                          postingLoading || (!newPostContent && newPostPictures.length===0 && newPostVideos.length===0)
+                          ? 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500 cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                   >
+                     {postingLoading ? 'Posting...' : 'Post'}
+                   </button>
+                </div>
+                 {/* Preview Selected Files count */}
+                 {(newPostPictures.length>0 || newPostVideos.length>0) && (
+                    <div className="px-2 pt-2 text-xs text-blue-600 dark:text-blue-400 font-medium">
+                        Added: {newPostPictures.length} Photos, {newPostVideos.length} Videos
+                    </div>
+                 )}
+            </div>
+
+            {/* Posts Feed */}
             {campaignLoading && (
-              <div className="p-4 text-center text-xs rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 animate-pulse">Loading posts...</div>
+               <div className="space-y-4">
+                 {[1,2].map(i => (
+                    <div key={i} className="bg-white dark:bg-[#242526] rounded-xl p-4 shadow-sm h-40 animate-pulse">
+                        <div className="flex gap-3 mb-4">
+                            <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                            <div className="flex-1 space-y-2">
+                                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+                                <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+                            </div>
+                        </div>
+                        <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
+                    </div>
+                 ))}
+               </div>
             )}
+            
             {!campaignLoading && campaignPosts.length===0 && !campaignError && (
-              <div className="p-4 text-sm text-center rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">No posts yet for this event.</div>
+               <div className="text-center py-10 bg-white dark:bg-[#242526] rounded-xl border border-gray-200 dark:border-gray-700 text-gray-500">
+                  No updates yet. Be the first to post!
+               </div>
             )}
-            <div className="space-y-4">
+
+            <div className="space-y-5">
               {campaignPosts.map(p => {
                 const userOwn = user?._id === p.ownerDetails?._id
+                const isMenuOpen = activeMenuPostId === p._id
+                const isCommentsExpanded = expandedComments[p._id]
+
                 return (
-                  <div key={(p._id||p.id||p.createdAt||Math.random())} className="p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
-                    <div className="flex items-start justify-between mb-2">
+                  <div key={(p._id||Math.random())} className="bg-white dark:bg-[#242526] rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-visible">
+                    
+                    {/* Post Header */}
+                    <div className="p-4 flex items-start justify-between relative">
                       <div className="flex items-center gap-3">
-                        <img src={p.ownerDetails?.ProfileImage || 'https://placehold.co/40x40'} alt="owner" className="w-10 h-10 rounded-full object-cover" />
+                        <img 
+                            src={p.ownerDetails?.ProfileImage || 'https://placehold.co/40x40/f3f4f6/111827?text=U'} 
+                            alt="avatar" 
+                            className="w-10 h-10 rounded-full object-cover ring-1 ring-gray-200 dark:ring-gray-700" 
+                        />
                         <div>
-                          <div className="text-sm font-semibold">{p.ownerDetails?.FullName || 'User'}</div>
-                          <div className="text-[10px] text-gray-500">{p.createdAt ? new Date(p.createdAt).toLocaleString() : ''}</div>
+                          <div className="font-bold text-gray-900 dark:text-gray-100 text-sm leading-tight">
+                              {p.ownerDetails?.FullName || 'Unknown User'}
+                          </div>
+                          {/* UPDATED: Date with Time Ago */}
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 flex gap-1 items-center" title={new Date(p.createdAt).toLocaleString()}>
+                              <span>{timeAgo(p.createdAt)}</span>
+                              <span>•</span>
+                              <span>{new Date(p.createdAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                          </div>
                         </div>
                       </div>
+
+                      {/* Three Dots Menu */}
                       {userOwn && (
-                        <button onClick={()=>handleDeletePost(p._id)} className="text-[10px] px-2 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700">Delete</button>
+                          <div className="relative">
+                            <button 
+                                onClick={() => toggleMenu(p._id)} 
+                                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-[#3A3B3C] text-gray-500 transition"
+                            >
+                                <ThreeDotsIcon className="w-5 h-5" />
+                            </button>
+                            
+                            {isMenuOpen && (
+                                <div className="absolute right-0 top-10 w-48 bg-white dark:bg-[#242526] rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 py-1 animation-fade-in">
+                                    <button 
+                                        onClick={() => handleEditPost(p._id)}
+                                        className="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-[#3A3B3C] text-sm text-gray-700 dark:text-gray-200 flex items-center gap-2"
+                                    >
+                                        <EditIcon className="w-4 h-4" /> Edit Post
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDeletePost(p._id)}
+                                        className="w-full text-left px-4 py-2.5 hover:bg-gray-100 dark:hover:bg-[#3A3B3C] text-sm text-red-600 dark:text-red-400 flex items-center gap-2"
+                                    >
+                                        <TrashIcon className="w-4 h-4" /> Delete Post
+                                    </button>
+                                </div>
+                            )}
+                          </div>
                       )}
                     </div>
-                    {p.content && <p className="text-sm mb-3 whitespace-pre-line">{p.content}</p>}
-                    {(Array.isArray(p.picture) && p.picture.length>0) || (Array.isArray(p.video) && p.video.length>0) ? (
-                      <div className="grid grid-cols-2 gap-2 mb-3">
-                        {(p.picture||[]).map(img => (
-                          <img key={img.publicId} src={img.url} className="w-full aspect-video object-cover rounded" />
-                        ))}
-                        {(p.video||[]).map(v => (
-                          <video key={v.publicId} src={v.url} controls className="w-full aspect-video rounded" />
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="flex items-center gap-4 text-xs mb-3">
-                      <button onClick={()=>handleReact(p._id,'like')} className="flex items-center gap-1 px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700">👍 {p.likes?.length||0}</button>
-                      <button onClick={()=>handleReact(p._id,'dislike')} className="flex items-center gap-1 px-2 py-1 rounded bg-yellow-50 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">👎 {p.dislikes?.length||0}</button>
+
+                    {/* Post Content */}
+                    <div className="px-4 pb-2">
+                       {p.content && <p className="text-[15px] text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">{p.content}</p>}
                     </div>
-                    <div className="space-y-2">
-                      {(p.comments||[]).map(c => {
-                        const ownC = user?._id === c.owner
-                        return (
-                          <div key={c._id} className="flex items-start gap-2">
-                            <img src={c.ownerProfileImage || 'https://placehold.co/24x24'} className="w-6 h-6 rounded-full object-cover" />
-                            <div className="flex-1 bg-gray-100 dark:bg-gray-800 rounded px-2 py-1 text-[11px]">
-                              <div className="font-semibold inline-block mr-1">{c.ownerName}</div>
-                              <span className="break-words">{c.comment}</span>
+
+                    {/* Media Grid */}
+                    {(p.picture?.length > 0 || p.video?.length > 0) && (
+                        <div className={`mt-2 ${
+                            (p.picture?.length + p.video?.length) > 1 ? 'grid grid-cols-2 gap-0.5' : ''
+                        }`}>
+                            {p.picture?.map((img) => (
+                                <img key={img.publicId} src={img.url} className="w-full h-full object-cover max-h-[500px]" alt="Post attachment" />
+                            ))}
+                            {p.video?.map((v) => (
+                                <video key={v.publicId} src={v.url} controls className="w-full h-full object-cover max-h-[500px]" />
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Reaction Counts */}
+                    <div className="px-4 py-3 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-gray-700 mx-4">
+                        <div className="flex items-center gap-1">
+                            {(p.likes?.length > 0 || p.dislikes?.length > 0) && (
+                                <span className="flex -space-x-1">
+                                    {p.likes?.length > 0 && <span className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-[8px] text-white">👍</span>}
+                                    {p.dislikes?.length > 0 && <span className="w-4 h-4 rounded-full bg-red-500 flex items-center justify-center text-[8px] text-white">👎</span>}
+                                </span>
+                            )}
+                            <span>{ (p.likes?.length || 0) + (p.dislikes?.length || 0) }</span>
+                        </div>
+                        <button 
+                            onClick={() => toggleComments(p._id)}
+                            className="hover:underline"
+                        >
+                            {p.comments?.length || 0} comments
+                        </button>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="px-2 py-1 flex justify-between gap-1 mx-2">
+                        <button 
+                            onClick={()=>handleReact(p._id,'like')} 
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#3A3B3C] transition text-sm font-medium ${
+                                p.likes?.includes(user?._id) ? 'text-blue-600' : 'text-gray-600 dark:text-gray-300'
+                            }`}
+                        >
+                            <ThumbUpIcon className="w-5 h-5" fill={p.likes?.includes(user?._id) ? "currentColor" : "none"}/>
+                            Like
+                        </button>
+                         <button 
+                            onClick={()=>handleReact(p._id,'dislike')} 
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#3A3B3C] transition text-sm font-medium ${
+                                p.dislikes?.includes(user?._id) ? 'text-red-600' : 'text-gray-600 dark:text-gray-300'
+                            }`}
+                        >
+                            <ThumbDownIcon className="w-5 h-5" fill={p.dislikes?.includes(user?._id) ? "currentColor" : "none"}/>
+                            Dislike
+                        </button>
+                        <button 
+                            onClick={() => toggleComments(p._id)}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-[#3A3B3C] transition text-gray-600 dark:text-gray-300 text-sm font-medium"
+                        >
+                            <CommentIcon className="w-5 h-5" />
+                            Comment
+                        </button>
+                    </div>
+
+                    {/* Comments Section (Dropdown) */}
+                    {isCommentsExpanded && (
+                      <div className="animation-fade-in-down">
+                        {p.comments?.length > 0 && (
+                            <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50/50 dark:bg-[#1A2129]/30">
+                                <div className="space-y-3">
+                                    {p.comments.map(c => (
+                                        <div key={c._id} className="flex gap-2 group">
+                                            <img src={c.ownerProfileImage || 'https://placehold.co/32x32'} className="w-8 h-8 rounded-full object-cover mt-1" alt="commenter" />
+                                            <div className="flex-1">
+                                                <div className="bg-gray-200 dark:bg-[#3A3B3C] rounded-2xl px-3 py-2 inline-block">
+                                                    <div className="font-semibold text-xs text-gray-900 dark:text-gray-200">{c.ownerName}</div>
+                                                    <div className="text-sm text-gray-800 dark:text-gray-300 break-words">{c.comment}</div>
+                                                </div>
+                                                {/* Comment Actions: Like & Reply */}
+                                                <div className="flex items-center gap-4 mt-1 ml-2 text-[10px] text-gray-500 font-medium">
+                                                    <button 
+                                                        onClick={() => handleReactComment(p._id, c._id)}
+                                                        className={`hover:underline ${c.likedByMe ? 'text-blue-600 font-bold' : ''}`}
+                                                    >
+                                                        Like {c.likesCount > 0 && `(${c.likesCount})`}
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleReplyComment(p._id, c.ownerName)}
+                                                        className="hover:underline"
+                                                    >
+                                                        Reply
+                                                    </button>
+                                                    {user?._id === c.owner && (
+                                                        <button onClick={()=>handleDeleteComment(p._id, c._id)} className="text-red-500 hover:underline">Delete</button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                            {ownC && <button onClick={()=>handleDeleteComment(p._id,c._id)} className="text-[10px] px-1 py-0.5 rounded bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200">✕</button>}
-                          </div>
-                        )
-                      })}
-                      <div className="flex items-center gap-2 mt-2">
-                        <input
-                          value={commentInputs[p._id]||''}
-                          onChange={(e)=> setCommentInputs(c=> ({ ...c, [p._id]: e.target.value })) }
-                          placeholder="Add a comment..."
-                          className="flex-1 px-2 py-1 rounded bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-[11px]"
-                        />
-                        <button onClick={()=>handleAddComment(p._id)} className="text-[10px] px-2 py-1 rounded bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-300 dark:border-green-700">Post</button>
+                        )}
+
+                        {/* Add Comment Box (Inside Dropdown) */}
+                        <div className="px-4 py-3 flex gap-2 items-center border-t border-gray-100 dark:border-gray-700">
+                            <img src={user?.ProfileImage || 'https://placehold.co/32x32'} className="w-8 h-8 rounded-full object-cover" alt="me" />
+                            <div className="flex-1 relative">
+                                <input
+                                    ref={el => commentInputRefs.current[p._id] = el}
+                                    value={commentInputs[p._id]||''}
+                                    onChange={(e)=> setCommentInputs(c=> ({ ...c, [p._id]: e.target.value })) }
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleAddComment(p._id); }}
+                                    placeholder="Write a comment..."
+                                    className="w-full bg-gray-100 dark:bg-[#3A3B3C] text-gray-900 dark:text-gray-100 rounded-full pl-4 pr-10 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                <button 
+                                    onClick={()=>handleAddComment(p._id)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-600 dark:text-blue-400 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full p-1 transition"
+                                >
+                                    <SendIcon className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 )
               })}
             </div>
           </div>
-
-          {/* Existing sections follow below untouched */}
-          {/* ...existing event detail original code after injection... */}
         </div>
-      )
+      );
     }
-    
-    // Priority 2: Navigation View
+
     switch (activeView) {
+      case NAV_ITEMS.DASHBOARD:
+        return renderDashboardView();
       case NAV_ITEMS.UPCOMING:
         return renderEventListView(NAV_ITEMS.UPCOMING);
       case NAV_ITEMS.RUNNING:
@@ -1242,85 +1714,94 @@ export default function UserDashboard(){
         return renderEventListView(NAV_ITEMS.PREVIOUS);
       case NAV_ITEMS.PROFILE:
         return renderProfileView();
-      case NAV_ITEMS.DASHBOARD:
       default:
-        return renderDashboardView();
+        return null;
     }
   };
 
-
   return (
-    <div className={`min-h-screen ${BG_BODY} ${TEXT_PRIMARY} font-sans flex flex-col lg:flex-row`}>
-      
-      {/* 1. Sidebar Navigation (Left Panel) */}
-      <aside className={`w-full lg:w-72 ${BG_SIDEBAR} shadow-xl lg:shadow-2xl p-6 lg:min-h-screen border-r border-gray-200 dark:border-gray-700/50`}>
-        
-        {/* Header/Logo */}
-        <div className="flex items-center mb-10 pb-4 border-b border-gray-200 dark:border-gray-700">
-          <span 
-            className={`text-2xl font-bold bg-clip-text text-transparent 
-                bg-gradient-to-r from-gray-900 via-gray-700 to-gray-500 
-                dark:from-white dark:to-gray-400`}
-          >
-            E-VoteHub
-          </span>
-        </div>
+    <div className="flex flex-col min-h-screen">
+      {/* Edit Post Modal */}
+      <EditPostModal 
+        post={editingPost}
+        isOpen={!!editingPostId}
+        onClose={() => {
+          setEditingPostId(null)
+          setEditingPost(null)
+        }}
+        onSave={handleSaveEditPost}
+        isLoading={editLoading}
+      />
 
-        {/* Navigation Links */}
-        <nav className="space-y-2">
-          <NavItem 
-            icon={DashboardIcon} 
-            label={NAV_ITEMS.DASHBOARD} 
-            isActive={activeView === NAV_ITEMS.DASHBOARD}
-            onClick={(e) => handleNavigation(NAV_ITEMS.DASHBOARD, e)}
-          />
-          <NavItem 
-            icon={RunningIcon} 
-            label={NAV_ITEMS.RUNNING} 
-            isActive={activeView === NAV_ITEMS.RUNNING}
-            onClick={(e) => handleNavigation(NAV_ITEMS.RUNNING, e)}
-          />
-          <NavItem 
-            icon={UpcomingIcon} 
-            label={NAV_ITEMS.UPCOMING} 
-            isActive={activeView === NAV_ITEMS.UPCOMING}
-            onClick={(e) => handleNavigation(NAV_ITEMS.UPCOMING, e)}
-          />
-          <NavItem 
-            icon={PreviousIcon} 
-            label={NAV_ITEMS.PREVIOUS} 
-            isActive={activeView === NAV_ITEMS.PREVIOUS}
-            onClick={(e) => handleNavigation(NAV_ITEMS.PREVIOUS, e)}
-          />
-        </nav>
+      {/* Layout Container */}
+      <div className={`flex-1 h-screen overflow-hidden ${BG_BODY} ${TEXT_PRIMARY} font-sans flex flex-col lg:flex-row`}>
+        {/* Sidebar */}
+        <aside className={`w-full lg:w-72 ${BG_SIDEBAR} shadow-xl lg:shadow-2xl p-6 lg:h-screen lg:overflow-y-auto border-r border-gray-200 dark:border-gray-700/50 flex-shrink-0`}>
+          
+          <div className="flex items-center mb-10 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <span className={`text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-gray-700 to-gray-500 dark:from-white dark:to-gray-400`}>
+              E-VoteHub
+            </span>
+          </div>
 
-        <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+          <nav className="space-y-2">
             <NavItem 
-                icon={ProfileIcon} 
-                label={NAV_ITEMS.PROFILE} 
-                isActive={activeView === NAV_ITEMS.PROFILE}
-                onClick={(e) => handleNavigation(NAV_ITEMS.PROFILE, e)}
+              icon={DashboardIcon} 
+              label={NAV_ITEMS.DASHBOARD} 
+              isActive={activeView === NAV_ITEMS.DASHBOARD && !activeEvent}
+              onClick={(e) => handleNavigation(NAV_ITEMS.DASHBOARD, e)}
             />
-        </div>
+          </nav>
 
-        {/* Logout Button (Moved here for consistency) */}
-        <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="mt-8 pt-8 border-t border-gray-200 dark:border-gray-700 space-y-2">
+            <h4 className={`text-xs ${TEXT_SECONDARY} uppercase font-semibold tracking-wider px-4 mb-2`}>Events</h4>
+            <NavItem 
+              icon={RunningIcon} 
+              label={NAV_ITEMS.RUNNING} 
+              isActive={activeView === NAV_ITEMS.RUNNING}
+              onClick={(e) => handleNavigation(NAV_ITEMS.RUNNING, e)}
+            />
+            <NavItem 
+              icon={UpcomingIcon} 
+              label={NAV_ITEMS.UPCOMING} 
+              isActive={activeView === NAV_ITEMS.UPCOMING}
+              onClick={(e) => handleNavigation(NAV_ITEMS.UPCOMING, e)}
+            />
+            <NavItem 
+              icon={PreviousIcon} 
+              label={NAV_ITEMS.PREVIOUS} 
+              isActive={activeView === NAV_ITEMS.PREVIOUS}
+              onClick={(e) => handleNavigation(NAV_ITEMS.PREVIOUS, e)}
+            />
+          </div>
+
+          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700 space-y-2">
+            <NavItem 
+              icon={ProfileIcon} 
+              label={NAV_ITEMS.PROFILE} 
+              isActive={activeView === NAV_ITEMS.PROFILE}
+              onClick={(e) => handleNavigation(NAV_ITEMS.PROFILE, e)}
+            />
             <button
-                onClick={onLogout}
-                className={`flex items-center w-full px-4 py-3 rounded-xl transition-all duration-200 bg-[#DC2626] text-white hover:bg-red-500 font-semibold shadow-md shadow-red-900/40`}
+              onClick={onLogout} 
+              className={`flex items-center w-full px-4 py-3 rounded-xl transition-all duration-200 font-medium text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800 shadow-sm`}
             >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-3"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
-                <span className="text-sm">Logout</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 mr-3"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+              <span className="text-sm">Logout</span>
             </button>
-        </div>
-      </aside>
+          </div>
+        </aside>
 
-      {/* 2. Main Content Area (Right Panel) */}
-      <main className="flex-1 p-6 md:p-10 max-w-full overflow-y-auto">
-        <div className="max-w-6xl mx-auto">
+        {/* Main Content */}
+        <main className="flex-1 p-6 md:p-10 lg:h-screen lg:overflow-y-auto">
+          <div className="max-w-6xl mx-auto">
             {renderActiveContent()}
-        </div>
-      </main>
+          </div>
+        </main>
+      </div>
+      
+      {/* Footer */}
+      <Footer />
     </div>
-  )
+  );
 }

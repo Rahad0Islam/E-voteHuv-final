@@ -133,7 +133,15 @@ const Footer = () => (
         <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Contact</h4>
         <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
             <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
-            support@evotehub.com
+            rahad@gmail.com
+        </p>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            autanu2020@gmail.com
+        </p>
+        <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            shajjad@gmail.com
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-600">
             [Shajalal University of Science and Technology]
