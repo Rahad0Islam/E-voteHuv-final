@@ -816,7 +816,7 @@ export default function AdminDashboard(){
                                 return (
                                 // This element uses BG_DARK_CARD, which is now fixed
                                 <div key={id} className={`flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 ${BG_DARK_CARD}`}>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-3 cursor-pointer" onClick={()=> openProfile(p.UserID, p.Description)}>
                                         <img src={p.UserID?.ProfileImage || 'https://placehold.co/40x40/d1d5db/4b5563?text=U'} className="w-10 h-10 rounded-full object-cover" alt="Profile" />
                                         <div>
                                             <div className="text-sm font-semibold">{p.UserID?.FullName || id}</div>
@@ -1142,6 +1142,8 @@ export default function AdminDashboard(){
       setApproved(list => list.filter(x => (x.UserID?._id || x.UserID) !== uid))
       if(found){
         setPending(list => [...list, { UserID: found.UserID, SelectedBalot: found.SelectedBalot, Description: found.Description }])
+        // Ensure profile modal is closed after unapproving so the user profile is not shown in the pending list
+        closeProfile()
       }
     }catch(err){ alert(err?.response?.data?.message || 'Failed to unapprove nominee') }
   }
