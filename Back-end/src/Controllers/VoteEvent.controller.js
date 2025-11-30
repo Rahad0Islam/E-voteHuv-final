@@ -19,7 +19,7 @@ const CreateVoteEvent = AsynHandler(async(req,res)=>{
     if (!CreateBy || req.user.Role!=="admin") {throw new ApiError(401, "Unauthorized: Admin not found");}
 
     const {Title="",Description="",RegEndTime,VoteStartTime,
-    VoteEndTime,ElectionType, votingMode, codeRotationMinutes}=req.body;
+    VoteEndTime,ElectionType, votingMode, codeRotationMinutes, place}=req.body;
 
    if (!Title || !RegEndTime || !VoteStartTime || !VoteEndTime || !ElectionType || !votingMode) {
     throw new ApiError(402, "All fields are required");
@@ -64,7 +64,8 @@ const CreateVoteEvent = AsynHandler(async(req,res)=>{
         ElectionType,
         CreateBy,
         votingMode,
-        codeRotationMinutes: votingMode==='onCampus' ? (parseInt(codeRotationMinutes,10)||2) : undefined
+        codeRotationMinutes: votingMode==='onCampus' ? (parseInt(codeRotationMinutes,10)||2) : undefined,
+        place: votingMode==='onCampus' ? (place || null) : null
     })
    
     console.log("Event Create succesfully!");

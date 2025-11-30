@@ -49,7 +49,9 @@ const EventSchema=new mongoose.Schema({
      // Optional fields to support onCampus rotating code
      codeRotationMinutes: { type: Number, default: 2 },
      currentVoteCode: { type: String, default: null },
-     currentCodeExpiresAt: { type: Date, default: null }
+     currentCodeExpiresAt: { type: Date, default: null },
+     // Optional place name for on-campus events
+     place: { type: String, default: null }
 
 },{timestamps:true});
 

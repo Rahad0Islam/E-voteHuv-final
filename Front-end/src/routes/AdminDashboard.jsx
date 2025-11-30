@@ -146,6 +146,11 @@ const EventListItem = ({ event, onClick, isActive }) => {
             <span className="mr-1">{statusSymbol}</span>
             <span className="font-semibold">{statusDetail.toUpperCase()}</span>
           </div>
+          {event.votingMode === 'onCampus' && event.place && (
+            <div className={`text-xs mt-1 ${TEXT_SECONDARY}`}>
+              <span className="font-semibold">Place:</span> {event.place}
+            </div>
+          )}
         </div>
         <div className={`text-sm ${TEXT_SECONDARY}`}>Type: {event.ElectionType}</div>
       </div>
@@ -164,7 +169,7 @@ export default function AdminDashboard(){
   const [voters, setVoters] = useState([])
 
   // event creation state
-  const [newEvent, setNewEvent] = useState({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single', votingMode:'online', codeRotationMinutes:15 })
+  const [newEvent, setNewEvent] = useState({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single', votingMode:'online', codeRotationMinutes:15, place:'' })
   const [ballotFiles, setBallotFiles] = useState([])
   const [isCreating, setIsCreating] = useState(false)
   const [loadingEvent, setLoadingEvent] = useState(false)
@@ -372,7 +377,7 @@ export default function AdminDashboard(){
     try{
       await createEvent({ ...newEvent, BallotImageFiles: ballotFiles })
       alert('Event created successfully!')
-      setNewEvent({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single', votingMode:'online', codeRotationMinutes:15 })
+      setNewEvent({ Title:'', Description:'', RegEndTime:'', VoteStartTime:'', VoteEndTime:'', ElectionType:'Single', votingMode:'online', codeRotationMinutes:15, place:'' })
       setBallotFiles([])
       
       const updated = await listEvents()
@@ -380,9 +385,7 @@ export default function AdminDashboard(){
       setActiveView(NAV_ITEMS.DASHBOARD) // Navigate back to dashboard after creation
     }catch(err){
       alert(err?.response?.data?.message || 'Failed to create event')
-    }finally{
-      setIsCreating(false)
-    }
+    }finally{ setIsCreating(false) }
   }
 
   // Load initial times for the active event into the editor state
@@ -656,10 +659,16 @@ export default function AdminDashboard(){
           </select>
         </div>
         {newEvent.votingMode === 'onCampus' && (
-          <div>
-            <label className={`text-sm font-semibold ${TEXT_PRIMARY}`}>Code Rotation Minutes</label>
-            <input type="number" min={1} value={newEvent.codeRotationMinutes} onChange={(e)=>setNewEvent(ne=>({...ne, codeRotationMinutes: Number(e.target.value)||15}))} className={INPUT_CLASS} />
-          </div>
+          <>
+            <div>
+              <label className={`text-sm font-semibold ${TEXT_PRIMARY}`}>Code Rotation Minutes</label>
+              <input type="number" min={1} value={newEvent.codeRotationMinutes} onChange={(e)=>setNewEvent(ne=>({...ne, codeRotationMinutes: Number(e.target.value)||15}))} className={INPUT_CLASS} />
+            </div>
+            <div>
+              <label className={`text-sm font-semibold ${TEXT_PRIMARY}`}>Place Name (On-Campus Location)</label>
+              <input type="text" placeholder="e.g., Main Hall, Building A" value={newEvent.place} onChange={(e)=>setNewEvent(ne=>({...ne, place: e.target.value}))} className={INPUT_CLASS} />
+            </div>
+          </>
         )}
 
         {/* Submit Button */}
@@ -748,6 +757,9 @@ export default function AdminDashboard(){
         <div className={`p-6 rounded-xl ${BG_CARD} shadow-xl border border-gray-200 dark:border-gray-700`}>
           <h3 className={`text-3xl font-extrabold ${ACCENT_PRIMARY_TEXT}`}>{activeEvent.Title}</h3>
           <p className={`${TEXT_SECONDARY} text-sm mt-1`}>Type: {activeEvent.ElectionType} | Status: <span className="font-bold">{eventStatus.toUpperCase()}</span></p>
+          {activeEvent.votingMode === 'onCampus' && activeEvent.place && (
+            <p className={`text-sm ${TEXT_SECONDARY} mt-1`}><span className="font-semibold">Place:</span> {activeEvent.place}</p>
+          )}
           {eventStatus === 'registration' && (
             <div className={`mt-1 text-xs font-mono ${ACCENT_WARNING}`}>Registration ends in: <span className="font-bold">{timeLeft(activeEvent.RegEndTime)}</span></div>
           )}
@@ -1254,6 +1266,7 @@ export default function AdminDashboard(){
       </main>
 
       {/* Profile Modal */}
+     
       {profileModal.open && profileModal.user && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onMouseDown={closeProfile}>
           <div className={`w-full max-w-md p-6 rounded-xl ${BG_CARD} border border-gray-200 dark:border-gray-700 shadow-xl relative`} onMouseDown={e=>e.stopPropagation()}>
