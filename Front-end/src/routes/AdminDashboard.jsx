@@ -341,6 +341,22 @@ export default function AdminDashboard(){
     setActiveEvent(event)
   }, [])
 
+  // --- File input handler for initial ballot images (images only, max 10)
+  const handleBallotFilesChange = useCallback((e) => {
+    const files = Array.from(e.target.files || [])
+    // Filter to images only
+    const imageFiles = files.filter(f => f.type.startsWith('image/'))
+    if (imageFiles.length !== files.length) {
+      alert('Only image files are allowed (PNG, JPG, JPEG). Non-image files were ignored.')
+    }
+    // Limit to max 10
+    const limited = imageFiles.slice(0, 10)
+    if (imageFiles.length > 10) {
+      alert('You can select a maximum of 10 images. Extra files were ignored.')
+    }
+    setBallotFiles(limited)
+  }, [])
+
   const onApprove = async (uid)=>{
     try{
       await approveNominee({ EventID: activeEvent._id, NomineeID: uid })
@@ -627,7 +643,7 @@ export default function AdminDashboard(){
         {/* Ballot Images */}
         <div className="lg:col-span-3">
           <label className={`block text-sm ${TEXT_SECONDARY} font-medium mb-2`}>Ballot Images (For Nominee Selection) - Max 10</label>
-          <input type="file" multiple onChange={handleBallotFilesChange} className={`${INPUT_CLASS.replace('p-3','p-2')} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300 dark:hover:file:bg-gray-600`} />
+          <input type="file" multiple accept="image/*" onChange={handleBallotFilesChange} className={`${INPUT_CLASS.replace('p-3','p-2')} file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 dark:file:bg-gray-700 dark:file:text-gray-300 dark:hover:file:bg-gray-600`} />
           <p className={`text-xs ${TEXT_SECONDARY} mt-1`}>Selected files: {ballotFiles.length}</p>
         </div>
 
@@ -724,6 +740,7 @@ export default function AdminDashboard(){
     const eventStatus = activeEvent.status; // status is set in EventListItem
     const isRanked = activeEvent.ElectionType === 'Rank';
     const mainColsClass = `grid lg:grid-cols-${isRanked ? 3 : 2} gap-6`;
+    const canModerate = eventStatus === 'registration' || eventStatus === 'waiting';
 
     return (
       <div className="space-y-6">
@@ -774,10 +791,12 @@ export default function AdminDashboard(){
                               <div className={`text-xs ${TEXT_SECONDARY}`}>@{n.UserID?.UserName}</div>
                             </div>
                           </div>
-                          <div className="flex flex-col gap-1">
-                            <button onClick={()=> onUnapprove(id)} className={`px-3 py-1 text-[10px] rounded bg-yellow-500 hover:bg-yellow-600 text-white font-semibold`}>Unapprove</button>
-                            <button onClick={()=> onRemoveNominee(id)} className={`px-3 py-1 text-[10px] rounded bg-red-600 hover:bg-red-700 text-white font-semibold`}>Remove</button>
-                          </div>
+                          {canModerate && (
+                            <div className="flex flex-col gap-1">
+                              <button onClick={()=> onUnapprove(id)} className={`px-3 py-1 text-[10px] rounded bg-yellow-500 hover:bg-yellow-600 text-white font-semibold`}>Unapprove</button>
+                              <button onClick={()=> onRemoveNominee(id)} className={`px-3 py-1 text-[10px] rounded bg-red-600 hover:bg-red-700 text-white font-semibold`}>Remove</button>
+                            </div>
+                          )}
                         </div>
                       )
                     })}
@@ -829,7 +848,9 @@ export default function AdminDashboard(){
                                   <img src={v.UserID?.ProfileImage || 'https://placehold.co/32x32/d1d5db/4b5563?text=V'} className="w-8 h-8 rounded-full object-cover" alt="Voter Profile"/>
                                   <span className="font-medium">{v.UserID?.FullName || uid}</span>
                                 </div>
-                                <button onClick={()=>handleRemoveVoter(uid)} className="text-[10px] px-2 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700">Remove</button>
+                                {canModerate && (
+                                  <button onClick={()=>handleRemoveVoter(uid)} className="text-[10px] px-2 py-1 rounded bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700">Remove</button>
+                                )}
                             </div>
                           )
                         })}
@@ -1243,7 +1264,14 @@ export default function AdminDashboard(){
               </div>
             </div>
             {profileModal.description && <div className="text-sm whitespace-pre-line mb-4">{profileModal.description}</div>}
-            <div className="text-[10px] ${TEXT_SECONDARY}">User ID: {profileModal.user?._id}</div>
+            <div className={`text-[10px] ${TEXT_SECONDARY} space-y-1`}>
+              {profileModal.user?.UserName && <div><span className="font-semibold">Username:</span> @{profileModal.user.UserName}</div>}
+              {profileModal.user?.Email && <div><span className="font-semibold">Email:</span> {profileModal.user.Email}</div>}
+              {profileModal.user?.Gender && <div><span className="font-semibold">Gender:</span> {profileModal.user.Gender}</div>}
+              {profileModal.user?.Age && <div><span className="font-semibold">Age:</span> {profileModal.user.Age}</div>}
+              {profileModal.user?.DOB && <div><span className="font-semibold">DOB:</span> {new Date(profileModal.user.DOB).toLocaleDateString()}</div>}
+              {profileModal.user?.Description && <div><span className="font-semibold">Bio:</span> {profileModal.user.Description}</div>}
+            </div>
           </div>
         </div>
       )}

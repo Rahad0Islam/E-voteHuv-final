@@ -137,6 +137,12 @@ const NomineeRegister=AsynHandler(async(req,res)=>{
         throw new ApiError(401,"Nominee register not completed");
      }
 
+     // Auto-register as voter if not already registered
+     const existingVoter = await VoterReg.findOne({ EventID, UserID });
+     if (!existingVoter) {
+       await VoterReg.create({ EventID, UserID });
+     }
+
      // reserve ballot immediately
      Event.UsedBallotImage.push({ url: SelectedBalot.url, publicId: SelectedBalot.publicId })
      Event.BallotImage = Event.BallotImage.filter(img => img.publicId !== SelectedBalot.publicId)
@@ -490,7 +496,7 @@ const GetApprovedNominee = AsynHandler(async (req, res) => {
 
   const NomineeDetails = await NomineeReg.find({ EventID, Approved: true })
     .select("UserID SelectedBalot Description Approved")
-    .populate('UserID', 'FullName UserName ProfileImage Email');
+    .populate('UserID', 'FullName UserName ProfileImage Email Gender Age DOB');
 
   return res.status(200).json(
     new ApiResponse(200, { NomineeDetails:NomineeDetails||[], count: NomineeDetails?.length||0 }, "Approved nominees retrieved successfully")
@@ -504,7 +510,7 @@ const GetPendingNominee = AsynHandler(async (req, res) => {
 
   const NomineeDetails = await NomineeReg.find({ EventID, Approved: false })
     .select("UserID SelectedBalot Description Approved")
-    .populate('UserID', 'FullName UserName ProfileImage Email');
+    .populate('UserID', 'FullName UserName ProfileImage Email Gender Age DOB');
 
   return res.status(200).json(
     new ApiResponse(200, { NomineeDetails: NomineeDetails || [], count: NomineeDetails?.length||0 }, "Pending nominees retrieved successfully")
@@ -517,7 +523,7 @@ const GetVoter=AsynHandler(async(req,res)=>{
 
   if (!EventID) { throw new ApiError(401, "EventID is required!"); }
 
-  const VoterDetails = await VoterReg.find({ EventID}).select("UserID hasVoted").populate('UserID', 'FullName UserName ProfileImage Email');
+  const VoterDetails = await VoterReg.find({ EventID}).select("UserID hasVoted").populate('UserID', 'FullName UserName ProfileImage Email Gender Age DOB');
 
   return res.status(200).json(new ApiResponse(200, { VoterDetails:VoterDetails||[], count: VoterDetails?.length||0 }, "Voter details retrived successfully"));
 })
