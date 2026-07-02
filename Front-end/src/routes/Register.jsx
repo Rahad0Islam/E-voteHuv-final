@@ -12,22 +12,29 @@ const COLOR_MAP = {
   BORDER: 'border-gray-200 dark:border-gray-700',
 };
 
-// Footer Component
+// --- Inline SVG Icons (Replacing lucide-react for single-file mandate) ---
+const LockIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>);
+const TrendingUpIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"></polyline><polyline points="16 7 22 7 22 13"></polyline></svg>);
+const ShieldCheckIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 13V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7c0 4.75 2.5 7.5 7.5 7.5S20 17.75 20 13z"></path><path d="m9 12 2 2 4-4"></path></svg>);
+const UsersIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>);
+const MailIcon = ({ className = '' }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.83 1.83 0 0 1-2.06 0L2 7"></path></svg>);
+
 const Footer = () => (
-  <footer className={`${COLOR_MAP.SCI_BG} border-t ${COLOR_MAP.BORDER} mt-16 py-12`}>
+  <footer className={`${COLOR_MAP.SCI_BG} border-t border-gray-200 dark:border-gray-700 mt-16 py-12`}>
     <div className="max-w-6xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8">
       
-      {/* 1. Logo and Mission */}
+      {/* 1. Logo and Mission - FIXED TO MATCH NAVBAR/HERO STYLE */}
       <div className="col-span-2 md:col-span-1">
         <div className="flex items-center mb-4">
-          <span 
-            className={`text-xl font-bold bg-clip-text text-transparent 
-              bg-gradient-to-r 
-              from-gray-900 via-gray-700 to-gray-500 
-              dark:from-white dark:to-gray-500`}
-          >
-            E-VoteHub
-          </span>
+            {/* Theme-aware E-VoteHub text using gradient */}
+            <span 
+                className={`text-xl font-bold bg-clip-text text-transparent 
+                    bg-gradient-to-r 
+                    from-gray-900 via-gray-700 to-gray-500 
+                dark:from-white dark:to-gray-500`}
+            >
+                E-VoteHub
+            </span>
         </div>
         <p className={`text-xs ${COLOR_MAP.TEXT_SECONDARY} max-w-xs`}>
           Unifying secure online voting with dynamic social campaigning to drive democratic engagement.
@@ -36,50 +43,50 @@ const Footer = () => (
 
       {/* 2. Navigation Links */}
       <div>
-        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider ${COLOR_MAP.TEXT_PRIMARY}`}>Platform</h4>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Platform</h4>
         <ul className="space-y-2 text-sm">
-          <li><Link to="/" className={`${COLOR_MAP.TEXT_SECONDARY} hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Home</Link></li>
-          <li><Link to="/user" className={`${COLOR_MAP.TEXT_SECONDARY} hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Dashboard</Link></li>
-          <li><Link to="/profile" className={`${COLOR_MAP.TEXT_SECONDARY} hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Profile Settings</Link></li>
+          <li><Link to="/" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Home</Link></li>
+          <li><Link to="/user" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Dashboard</Link></li>
+          <li><Link to="/profile" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Profile Settings</Link></li>
         </ul>
       </div>
 
       {/* 3. Resources/Legal Links */}
       <div>
-        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider ${COLOR_MAP.TEXT_PRIMARY}`}>Resources</h4>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Resources</h4>
         <ul className="space-y-2 text-sm">
-          <li><a href="#" className={`${COLOR_MAP.TEXT_SECONDARY} hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Security Policy</a></li>
-          <li><a href="#" className={`${COLOR_MAP.TEXT_SECONDARY} hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Terms of Service</a></li>
-          <li><a href="#" className={`${COLOR_MAP.TEXT_SECONDARY} hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Privacy Statement</a></li>
+          <li><Link to="/privacyPolicy" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Privacy Policy</Link></li>
+          <li><Link to="/terms" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Terms & Conditions</Link></li>
+          <li><Link to="/aboutus" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>About Us</Link></li>
         </ul>
       </div>
 
       {/* 4. Contact */}
       <div>
-        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider ${COLOR_MAP.TEXT_PRIMARY}`}>Contact</h4>
+        <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Contact</h4>
         <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
-          <Mail className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`} />
-          rahad@gmail.com
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            rahad@gmail.com
         </p>
         <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
-          <Mail className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`} />
-          autanu2020@gmail.com
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            autanu2020@gmail.com
         </p>
         <p className={`text-sm ${COLOR_MAP.TEXT_SECONDARY} flex items-center mb-2`}>
-          <Mail className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`} />
-          shajjad@gmail.com
+            <MailIcon className={`w-4 h-4 mr-2 ${COLOR_MAP.SCI_ACCENT_TEXT}`}/>
+            shajjad@gmail.com
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-600">
-          [Shajalal University of Science and Technology]
+            [Shajalal University of Science and Technology]
         </p>
       </div>
 
     </div>
 
-    {/* Bottom Copyright */}
+    {/* Bottom Copyright and ID */}
     <div className="max-w-6xl mx-auto px-4 mt-10 pt-6 border-t border-gray-300 dark:border-slate-700 text-center">
       <p className="text-xs text-slate-500 dark:text-slate-600">
-        &copy; {new Date().getFullYear()} E-VoteHub. All rights reserved.
+        &copy; {new Date().getFullYear()} E-VoteHub. All rights reserved <span className="font-mono text-gray-400 dark:text-slate-700/50"></span>
       </p>
     </div>
   </footer>

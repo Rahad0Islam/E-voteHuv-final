@@ -9,6 +9,9 @@ import RequireAuth from '../components/RequireAuth.jsx'
 import { logout } from '../lib/api'
 import Profile from './Profile.jsx'
 import PublicProfile from './PublicProfile.jsx'
+import PrivacyPolicy from './PrivacyPolicy.jsx' // already present
+import Terms from './Terms.jsx' // added import
+import AboutUs from './AboutUs.jsx' // <-- new import
 // Logos are now conditionally referenced based on the current theme state.
 
 // --- Color Palette Mapping ---
@@ -32,16 +35,7 @@ const COLORS = {
 
 
 export default function App(){
-  // Default theme is 'light'. If a previous session stored 'dark', clear it
-  // so existing users also see the new light default on next load.
-  const [theme, setTheme] = useState(() => {
-    const stored = localStorage.getItem('theme')
-    if (stored === 'dark') {
-      localStorage.setItem('theme', 'light')
-      return 'light'
-    }
-    return stored || 'light'
-  })
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('accessToken'))
   const [user, setUser] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('user')||'null')}catch{return null} })
   const navigate = useNavigate()
@@ -168,6 +162,9 @@ export default function App(){
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/aboutus" element={<AboutUs />} /> {/* About Us page route */}
+          <Route path="/privacyPolicy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<Terms />} /> {/* new public route for Terms & Conditions */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/user" element={<RequireAuth><UserDashboard /></RequireAuth>} />

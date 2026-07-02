@@ -93,6 +93,8 @@ const NAV_ITEMS = {
   PROFILE: 'Update Profile'
 }
 
+
+
 // Helper to format "Time Ago"
 const timeAgo = (dateParam) => {
   if (!dateParam) return null;
@@ -148,9 +150,9 @@ const Footer = () => (
       <div>
         <h4 className={`text-sm font-semibold mb-3 uppercase tracking-wider`}>Resources</h4>
         <ul className="space-y-2 text-sm">
-          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Security Policy</a></li>
-          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Terms of Service</a></li>
-          <li><a href="#" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Privacy Statement</a></li>
+          <li><Link to="/privacyPolicy" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Privacy Policy</Link></li>
+          <li><Link to="/terms" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>Terms & Conditions</Link></li>
+          <li><Link to="/aboutus" className={`text-slate-600 dark:text-slate-400 hover:${COLOR_MAP.SCI_ACCENT_TEXT} transition`}>About Us</Link></li>
         </ul>
       </div>
 
@@ -179,7 +181,7 @@ const Footer = () => (
     {/* Bottom Copyright and ID */}
     <div className="max-w-6xl mx-auto px-4 mt-10 pt-6 border-t border-gray-300 dark:border-slate-700 text-center">
       <p className="text-xs text-slate-500 dark:text-slate-600">
-        &copy; {new Date().getFullYear()} E-VoteHub. All rights reserved
+        &copy; {new Date().getFullYear()} E-VoteHub. All rights reserved <span className="font-mono text-gray-400 dark:text-slate-700/50"></span>
       </p>
     </div>
   </footer>
@@ -221,7 +223,7 @@ const EditPostModal = ({ post, isOpen, onClose, onSave, isLoading }) => {
 
   const handleSave = () => {
     if (!editContent.trim() && existingPictures.length === 0 && existingVideos.length === 0 && editPictures.length === 0 && editVideos.length === 0) {
-      Swal.fire({title: 'Invalid Post', text: 'Your post cannot be empty', icon: 'error', confirmButtonText: 'OK', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Invalid Post', text: 'Your post cannot be empty', icon: 'error', confirmButtonText: 'OK', background: 'rgb(255, 0, 0)', color: 'rgb(255, 255, 255)'})
       return
     }
     onSave({
@@ -713,22 +715,22 @@ export default function UserDashboard(){
     try{ 
       await voterRegister(activeEvent._id); 
       setIsVoterRegistered(true); 
-      Swal.fire({title: 'Registration Successful!', text: 'You have been registered as a voter', icon: 'success', confirmButtonText: 'Great!', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'}) 
+      Swal.fire({title: 'Registration Successful!', text: 'You have been registered as a voter', icon: 'success', confirmButtonText: 'Great!', background: 'rgb(0, 128, 0)', color: 'rgb(255, 255, 255)'}) 
     }catch(err){ 
-      Swal.fire({title: 'Registration Failed', text: err?.response?.data?.message || 'Failed to register as voter', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'}) 
+      Swal.fire({title: 'Registration Failed', text: err?.response?.data?.message || 'Failed to register as voter', icon: 'error', confirmButtonText: 'Try Again', background: 'rgb(255, 0, 0)', color: 'rgb(255, 255, 255)'}) 
     }
   }, [activeEvent])
 
   const onNominate = useCallback(async (e)=>{
     if(e) { e.preventDefault(); e.stopPropagation() }
     if(!activeEvent) return
-    if(!selectedBallot){ Swal.fire({title: 'Missing Ballot', text: 'Please select a ballot image to continue', icon: 'warning', confirmButtonText: 'OK', background: 'rgba(239, 193, 68, 0.15)', color: 'var(--text-primary)'}); return }
+    if(!selectedBallot){ Swal.fire({title: 'Missing Ballot', text: 'Please select a ballot image to continue', icon: 'warning', confirmButtonText: 'OK', background: 'rgb(255, 255, 0)', color: 'rgb(255, 255, 255)'}); return }
     try{
       await nomineeRegister({ EventID: activeEvent._id, SelectedBalot:{ url: selectedBallot.url, publicId: selectedBallot.publicId }, Description: desc })
       setIsNomineeRegistered(true)
-      Swal.fire({title: 'Submitted Successfully!', text: 'Your nominee registration has been submitted and is awaiting admin approval', icon: 'success', confirmButtonText: 'Perfect!', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Submitted Successfully!', text: 'Your nominee registration has been submitted and is awaiting admin approval', icon: 'success', confirmButtonText: 'Perfect!', background: 'rgb(0, 128, 0)', color: 'rgb(255, 255, 255)'})
     }catch(err){
-      Swal.fire({title: 'Registration Failed', text: err?.response?.data?.message || 'Failed to register as nominee', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Registration Failed', text: err?.response?.data?.message || 'Failed to register as nominee', icon: 'error', confirmButtonText: 'Try Again', background: 'rgb(255, 0, 0)', color: 'rgb(255, 255, 255)'})
     }
   }, [activeEvent, selectedBallot, desc])
 
@@ -739,7 +741,7 @@ export default function UserDashboard(){
     if(requiresCode){
       const normalized = String(voteCode||'').trim()
       if(normalized.length !== 6 || !/^[0-9]{6}$/.test(normalized)){
-        Swal.fire({title: 'Invalid Code', text: 'Please enter a valid 6-digit code to submit your vote', icon: 'error', confirmButtonText: 'OK', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+        Swal.fire({title: 'Invalid Code', text: 'Please enter a valid 6-digit code to submit your vote', icon: 'error', confirmButtonText: 'OK', background: 'rgb(255, 0, 0)', color: 'rgb(255, 255, 255)'})
         return
       }
     }
@@ -757,9 +759,9 @@ export default function UserDashboard(){
       }
       await giveVote({ EventID: activeEvent._id, ElectionType, SelectedNominee, code: voteCode })
       setHasVoted(true)
-      Swal.fire({title: 'Vote Submitted!', text: 'Your vote has been successfully submitted and recorded', icon: 'success', confirmButtonText: 'Thank You!', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Vote Submitted!', text: 'Your vote has been successfully submitted and recorded', icon: 'success', confirmButtonText: 'Thank You!', background: 'rgb(0, 128, 0)', color: 'rgb(255, 255, 255)'})
     }catch(err){
-      Swal.fire({title: 'Vote Failed', text: err?.response?.data?.message || 'Failed to submit your vote', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Vote Failed', text: err?.response?.data?.message || 'Failed to submit your vote', icon: 'error', confirmButtonText: 'Try Again', background: 'rgb(255, 0, 0)', color: 'rgb(255, 255, 255)'})
     } finally {
       setIsSubmittingVote(false)
     }
@@ -934,10 +936,10 @@ export default function UserDashboard(){
       setCampaignPosts(Array.isArray(refreshed)? refreshed : (refreshed?.posts||[]))
       setEditingPostId(null)
       setEditingPost(null)
-      Swal.fire({title: 'Success!', text: 'Your post has been updated successfully', icon: 'success', confirmButtonText: 'Done', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Success!', text: 'Your post has been updated successfully', icon: 'success', confirmButtonText: 'Done', background: 'rgb(0, 128, 0)', color: 'rgb(255, 255, 255)'})
     } catch (err) {
       setCampaignError(err?.response?.data?.message || 'Failed to update post')
-      Swal.fire({title: 'Update Failed', text: err?.response?.data?.message || 'Failed to update your post', icon: 'error', confirmButtonText: 'Retry', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Update Failed', text: err?.response?.data?.message || 'Failed to update your post', icon: 'error', confirmButtonText: 'Retry', background: 'rgb(255, 0, 0)', color: 'rgb(255, 255, 255)'})
     } finally {
       setEditLoading(false)
     }
@@ -945,7 +947,7 @@ export default function UserDashboard(){
 
   const handleDeletePost = useCallback(async (postId)=>{
     if(!activeEvent) return
-    const result = await Swal.fire({title: 'Delete Post?', text: 'This action cannot be undone. Your post will be permanently deleted.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, Delete', cancelButtonText: 'Cancel', confirmButtonColor: '#DC2626', cancelButtonColor: '#6B7280', background: 'rgba(239, 193, 68, 0.15)', color: 'var(--text-primary)'}); if (!result.isConfirmed) return
+    const result = await Swal.fire({title: 'Delete Post?', text: 'This action cannot be undone. Your post will be permanently deleted.', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, Delete', cancelButtonText: 'Cancel', confirmButtonColor: '#DC2626', cancelButtonColor: '#6B7280', background: 'rgb(255, 255, 0)', color: 'rgb(255, 255, 255)'}); if (!result.isConfirmed) return
     try{
       await deleteCampaignPost({ eventID: activeEvent._id, postID: postId })
       setCampaignPosts(p=> p.filter(x=> x._id!==postId))
@@ -1004,9 +1006,9 @@ export default function UserDashboard(){
       if (activeEvent?.votingMode !== 'online') return
       setSendingCode(true)
       await sendOnlineVoteCode(activeEvent._id)
-      Swal.fire({title: 'Code Sent!', text: 'A verification code has been sent to your email address', icon: 'success', confirmButtonText: 'OK', background: 'rgba(134, 239, 172, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Code Sent!', text: 'A verification code has been sent to your email address', icon: 'success', confirmButtonText: 'OK', background: 'rgb(0, 128, 0)', color: 'rgb(255, 255, 255)'})
     }catch(err){
-      Swal.fire({title: 'Failed to Send', text: err?.response?.data?.message || 'Failed to send verification code', icon: 'error', confirmButtonText: 'Try Again', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--text-primary)'})
+      Swal.fire({title: 'Failed to Send', text: err?.response?.data?.message || 'Failed to send verification code', icon: 'error', confirmButtonText: 'Try Again', background: 'rgb(255, 0, 0)', color: 'rgb(255, 255, 255)'})
     }finally{
       setSendingCode(false)
     }
