@@ -32,7 +32,16 @@ const COLORS = {
 
 
 export default function App(){
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
+  // Default theme is 'light'. If a previous session stored 'dark', clear it
+  // so existing users also see the new light default on next load.
+  const [theme, setTheme] = useState(() => {
+    const stored = localStorage.getItem('theme')
+    if (stored === 'dark') {
+      localStorage.setItem('theme', 'light')
+      return 'light'
+    }
+    return stored || 'light'
+  })
   const [authed, setAuthed] = useState(() => !!localStorage.getItem('accessToken'))
   const [user, setUser] = useState(()=>{ try{ return JSON.parse(localStorage.getItem('user')||'null')}catch{return null} })
   const navigate = useNavigate()
