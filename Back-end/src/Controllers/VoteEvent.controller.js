@@ -40,17 +40,14 @@ const CreateVoteEvent = AsynHandler(async(req,res)=>{
 
 
     for (let index = 0; index < array.length; index++) {
-        const element = array[index]?.path;
-        const LocalPath=await FileUpload(element);
-        
+        const LocalPath=await FileUpload(array[index]);
+
         if(!LocalPath){throw new ApiError(401,"BallotImage required");}
           else{
            BallotImagePath.push({
             url: LocalPath?.url,
             publicId: LocalPath?.public_id
-           
-         });
-
+           });
         }
     }
 
@@ -770,7 +767,7 @@ const AddBallotImages = AsynHandler(async (req, res) => {
   if(files.length === 0) throw new ApiError(400,'No files provided')
   const added = []
   for(const f of files){
-    try{ const up = await FileUpload(f.path); if(up){ added.push({ url: up.url, publicId: up.public_id }) } }catch(e){ console.error('Ballot add upload failed', e?.message||e) }
+    try{ const up = await FileUpload(f); if(up){ added.push({ url: up.url, publicId: up.public_id }) } }catch(e){ console.error('Ballot add upload failed', e?.message||e) }
   }
   if(added.length === 0) throw new ApiError(500,'Upload failed')
   // Append to available ballot list (avoid duplicates by publicId)

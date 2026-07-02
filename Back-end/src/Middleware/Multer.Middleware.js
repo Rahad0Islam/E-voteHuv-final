@@ -1,15 +1,9 @@
 import multer from "multer";
 
-const Storage=multer.diskStorage(
-    {
-     destination:function(req,file,cb){
-            cb(null,'public/Temp')
-        },
+// Use memory storage so files live in `req.files[i].buffer`.
+// This avoids any local filesystem writes, which fail on serverless
+// platforms like Vercel (the only writable path is /tmp, and writing
+// to the project directory throws ENOENT).
+const Storage = multer.memoryStorage();
 
-       filename: function(req,file,cb){
-          cb(null,file.originalname)
-       }   
-    }
-)
-
-export const upload =multer({storage:Storage});
+export const upload = multer({ storage: Storage });

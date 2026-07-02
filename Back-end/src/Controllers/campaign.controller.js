@@ -5,7 +5,6 @@ import { AsynHandler } from "../Utils/AsyncHandler.js";
 import { FileDelete, FileUpload } from "../Utils/Cloudinary.js";
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import fs from 'fs'
 import { transporter } from "../Middleware/Email.config.js";
 import { post } from "../Models/post.model.js";
 import { VoteEvent } from "../Models/VoteEvent.Model.js";
@@ -33,7 +32,7 @@ const posting=AsynHandler(async(req,res)=>{
     const pictureFiles = Array.isArray(req.files?.picture) ? req.files.picture : [];
     for (const pic of pictureFiles) {
         try {
-            const LocalPath = await FileUpload(pic.path);
+            const LocalPath = await FileUpload(pic);
             if(LocalPath){
                 pictureLocalPath.push({ url: LocalPath.url, publicId: LocalPath.public_id });
             }
@@ -46,7 +45,7 @@ const posting=AsynHandler(async(req,res)=>{
     const videoFiles = Array.isArray(req.files?.video) ? req.files.video : [];
     for (const vid of videoFiles) {
         try {
-            const LocalPath = await FileUpload(vid.path);
+            const LocalPath = await FileUpload(vid);
             if(LocalPath){
                 videoLocalPath.push({ url: LocalPath.url, publicId: LocalPath.public_id });
             }
@@ -379,13 +378,13 @@ const editPost = AsynHandler(async (req, res) => {
   const newPics = []
   const pictureFiles = Array.isArray(req.files?.picture) ? req.files.picture : []
   for(const pic of pictureFiles){
-    try{ const up = await FileUpload(pic.path); if(up){ newPics.push({ url: up.url, publicId: up.public_id }) } }
+    try{ const up = await FileUpload(pic); if(up){ newPics.push({ url: up.url, publicId: up.public_id }) } }
     catch(e){ console.error('Edit upload picture failed', e?.message||e) }
   }
   const newVids = []
   const videoFiles = Array.isArray(req.files?.video) ? req.files.video : []
   for(const vid of videoFiles){
-    try{ const up = await FileUpload(vid.path); if(up){ newVids.push({ url: up.url, publicId: up.public_id }) } }
+    try{ const up = await FileUpload(vid); if(up){ newVids.push({ url: up.url, publicId: up.public_id }) } }
     catch(e){ console.error('Edit upload video failed', e?.message||e) }
   }
   if(newPics.length) PostDoc.picture = [ ...(PostDoc.picture||[]), ...newPics ]

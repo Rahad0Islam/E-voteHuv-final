@@ -5,7 +5,6 @@ import { AsynHandler } from "../Utils/AsyncHandler.js";
 import { FileDelete, FileUpload } from "../Utils/Cloudinary.js";
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import fs from 'fs'
 import { transporter } from "../Middleware/Email.config.js";
 
 const Option={
@@ -102,30 +101,33 @@ const Register = AsynHandler(async(req,res)=>{
     const AlreadyExistEmailUsername= await User.findOne({ $or:[{Email},{UserName}] })
     if(AlreadyExistEmailUsername) throw new ApiError(401,"Username or Email already Exist");
 
-    let ProfileImageLocalPath="";
-    let CoverImageLocalPath="";
+    let ProfileImageFile=null;
+    let CoverImageFile=null;
 
     if (
       Array.isArray(req.files?.ProfileImage) && req.files?.ProfileImage.length > 0 &&
       Array.isArray(req.files?.CoverImage) && req.files?.CoverImage.length > 0
     ){
-      ProfileImageLocalPath=req.files?.ProfileImage[0]?.path;
-      CoverImageLocalPath= req.files?.CoverImage[0]?.path;
+      ProfileImageFile = req.files.ProfileImage[0];
+      CoverImageFile = req.files.CoverImage[0];
     }
 
-    if(!ProfileImageLocalPath){ throw new ApiError(401,"profile picture is required"); }
-    if(!CoverImageLocalPath){ throw new ApiError(401,"Cover image is required"); }
+    if(!ProfileImageFile){ throw new ApiError(401,"profile picture is required"); }
+    if(!CoverImageFile){ throw new ApiError(401,"Cover image is required"); }
 
     // Generate OTP and token
     const code = generateOtp();
     const token = genToken();
     const expiresAt = Date.now() + 10*60*1000; // 10 minutes
 
-    // Store pending data (do not upload or create user yet)
+    // Store pending data (do not upload or create user yet).
+    // NOTE: On Vercel/serverless, in-memory Maps don't survive across
+    // requests reliably. Replace with Redis/Mongo if you see OTP loss
+    // in production. For now this keeps local + Vercel-same-instance flows working.
     pendingRegs.set(token, {
       code,
       expiresAt,
-      data: { FullName,UserName,Email,DateOfBirth,Gender,Password,NID,PhoneNumber, ProfileImageLocalPath, CoverImageLocalPath }
+      data: { FullName,UserName,Email,DateOfBirth,Gender,Password,NID,PhoneNumber, ProfileImageFile, CoverImageFile }
     });
 
     // Send OTP email (professional style)
@@ -157,11 +159,11 @@ const RegisterVerify = AsynHandler(async (req, res) => {
   if(Date.now() > pending.expiresAt) { pendingRegs.delete(otpToken); throw new ApiError(400, 'OTP expired'); }
   if(String(code).trim() !== String(pending.code)) throw new ApiError(400, 'Invalid code');
 
-  const { FullName,UserName,Email,DateOfBirth,Gender,Password,NID,PhoneNumber, ProfileImageLocalPath, CoverImageLocalPath } = pending.data;
+  const { FullName,UserName,Email,DateOfBirth,Gender,Password,NID,PhoneNumber, ProfileImageFile, CoverImageFile } = pending.data;
 
-  // Upload to Cloudinary
-  const ProfileImage = await FileUpload(ProfileImageLocalPath);
-  const CoverImage = await FileUpload(CoverImageLocalPath);
+  // Upload to Cloudinary (from in-memory buffers — no disk writes)
+  const ProfileImage = await FileUpload(ProfileImageFile);
+  const CoverImage = await FileUpload(CoverImageFile);
   if(!ProfileImage || !CoverImage) throw new ApiError(501,'Cloudinary problem')
 
   // Create user
@@ -176,10 +178,8 @@ const RegisterVerify = AsynHandler(async (req, res) => {
   const CreateUser=await User.findById(user._id).select("-Password -RefreshToken");
   if(!CreateUser) throw new ApiError(501,'Something Went Wrong while registering!')
 
-  // Clean up pending and temp files
+  // Clean up pending
   pendingRegs.delete(otpToken);
-  // try{ if(ProfileImageLocalPath) fs.unlink(ProfileImageLocalPath, ()=>{}) }catch{}
-  // try{ if(CoverImageLocalPath) fs.unlink(CoverImageLocalPath, ()=>{}) }catch{}
 
   // Send welcome email (professional style)
   const welcomeHtml = buildEmailTemplate({
@@ -318,9 +318,9 @@ const ChangePassword=AsynHandler(async(req,res)=>{
 })
 
 const UpdateProfilePic=AsynHandler(async(req,res)=>{
-      const ProfileImageLocalPath=req.file?.path;
+      const ProfileImageFile=req.file;
 
-      if(!ProfileImageLocalPath)throw new ApiError(401,"profile picture required");
+      if(!ProfileImageFile)throw new ApiError(401,"profile picture required");
 
      const DelOldProfile= await FileDelete(req.user?.ProfilePublicId);
 
@@ -328,7 +328,7 @@ const UpdateProfilePic=AsynHandler(async(req,res)=>{
 
       console.log("deleted Old Profile Picture");
 
-     const NewProfilePic= await FileUpload(ProfileImageLocalPath);
+     const NewProfilePic= await FileUpload(ProfileImageFile);
 
      if(!NewProfilePic)throw new ApiError(501,"can not upload profile picture in cloudinary ")
      console.log("New Profile picture uploaded Succesfully ");
@@ -353,9 +353,9 @@ const UpdateProfilePic=AsynHandler(async(req,res)=>{
 
 
 const UpdateCoverPic=AsynHandler(async(req,res)=>{
-      const CoverImageLocalPath=req.file?.path;
+      const CoverImageFile=req.file;
 
-      if(!CoverImageLocalPath)throw new ApiError(401,"Cover picture required");
+      if(!CoverImageFile)throw new ApiError(401,"Cover picture required");
 
      const DelOldCover= await FileDelete(req.user?.CoverPublicId);
 
@@ -363,7 +363,7 @@ const UpdateCoverPic=AsynHandler(async(req,res)=>{
 
       console.log("deleted Old Cover Picture");
 
-     const NewCoverPic= await FileUpload(CoverImageLocalPath);
+     const NewCoverPic= await FileUpload(CoverImageFile);
 
      if(!NewCoverPic)throw new ApiError(501,"can not upload Cover picture in cloudinary ")
      console.log("New Cover picture uploaded Succesfully ");
